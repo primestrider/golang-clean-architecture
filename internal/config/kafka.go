@@ -1,14 +1,15 @@
 package config
 
 import (
+	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/IBM/sarama"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
-func NewKafkaConsumerGroup(config *viper.Viper, log *logrus.Logger) sarama.ConsumerGroup {
+func NewKafkaConsumerGroup(config *viper.Viper, log *slog.Logger) sarama.ConsumerGroup {
 	saramaConfig := sarama.NewConfig()
 	saramaConfig.Consumer.Return.Errors = true
 
@@ -24,12 +25,13 @@ func NewKafkaConsumerGroup(config *viper.Viper, log *logrus.Logger) sarama.Consu
 
 	consumerGroup, err := sarama.NewConsumerGroup(brokers, groupID, saramaConfig)
 	if err != nil {
-		log.Fatalf("Failed to create consumer group: %v", err)
+		log.Error("Failed to create consumer group", "error", err)
+		os.Exit(1)
 	}
 	return consumerGroup
 }
 
-func NewKafkaProducer(config *viper.Viper, log *logrus.Logger) sarama.SyncProducer {
+func NewKafkaProducer(config *viper.Viper, log *slog.Logger) sarama.SyncProducer {
 	if !config.GetBool("kafka.producer.enabled") {
 		log.Info("Kafka producer is disabled")
 		return nil
@@ -44,7 +46,8 @@ func NewKafkaProducer(config *viper.Viper, log *logrus.Logger) sarama.SyncProduc
 
 	producer, err := sarama.NewSyncProducer(brokers, saramaConfig)
 	if err != nil {
-		log.Fatalf("Failed to create producer: %v", err)
+		log.Error("Failed to create producer", "error", err)
+		os.Exit(1)
 	}
 	return producer
 }

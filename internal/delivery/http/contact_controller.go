@@ -4,44 +4,44 @@ import (
 	"golang-clean-architecture/internal/delivery/http/middleware"
 	"golang-clean-architecture/internal/model"
 	"golang-clean-architecture/internal/usecase"
+	"log/slog"
 	"math"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/sirupsen/logrus"
+	"github.com/gofiber/fiber/v3"
 )
 
 type ContactController struct {
 	UseCase *usecase.ContactUseCase
-	Log     *logrus.Logger
+	Log     *slog.Logger
 }
 
-func NewContactController(useCase *usecase.ContactUseCase, log *logrus.Logger) *ContactController {
+func NewContactController(useCase *usecase.ContactUseCase, log *slog.Logger) *ContactController {
 	return &ContactController{
 		UseCase: useCase,
 		Log:     log,
 	}
 }
 
-func (c *ContactController) Create(ctx *fiber.Ctx) error {
+func (c *ContactController) Create(ctx fiber.Ctx) error {
 	auth := middleware.GetUser(ctx)
 
 	request := new(model.CreateContactRequest)
-	if err := ctx.BodyParser(request); err != nil {
-		c.Log.WithError(err).Error("error parsing request body")
+	if err := ctx.Bind().Body(request); err != nil {
+		c.Log.Error("error parsing request body", "error", err)
 		return fiber.ErrBadRequest
 	}
 	request.UserId = auth.ID
 
-	response, err := c.UseCase.Create(ctx.UserContext(), request)
+	response, err := c.UseCase.Create(ctx.Context(), request)
 	if err != nil {
-		c.Log.WithError(err).Error("error creating contact")
+		c.Log.Error("error creating contact", "error", err)
 		return err
 	}
 
 	return ctx.JSON(model.WebResponse[*model.ContactResponse]{Data: response})
 }
 
-func (c *ContactController) List(ctx *fiber.Ctx) error {
+func (c *ContactController) List(ctx fiber.Ctx) error {
 	auth := middleware.GetUser(ctx)
 
 	request := &model.SearchContactRequest{
@@ -49,13 +49,13 @@ func (c *ContactController) List(ctx *fiber.Ctx) error {
 		Name:   ctx.Query("name", ""),
 		Email:  ctx.Query("email", ""),
 		Phone:  ctx.Query("phone", ""),
-		Page:   ctx.QueryInt("page", 1),
-		Size:   ctx.QueryInt("size", 10),
+		Page:   fiber.Query[int](ctx, "page", 1),
+		Size:   fiber.Query[int](ctx, "size", 10),
 	}
 
-	responses, total, err := c.UseCase.Search(ctx.UserContext(), request)
+	responses, total, err := c.UseCase.Search(ctx.Context(), request)
 	if err != nil {
-		c.Log.WithError(err).Error("error searching contact")
+		c.Log.Error("error searching contact", "error", err)
 		return err
 	}
 
@@ -72,7 +72,7 @@ func (c *ContactController) List(ctx *fiber.Ctx) error {
 	})
 }
 
-func (c *ContactController) Get(ctx *fiber.Ctx) error {
+func (c *ContactController) Get(ctx fiber.Ctx) error {
 	auth := middleware.GetUser(ctx)
 
 	request := &model.GetContactRequest{
@@ -80,37 +80,37 @@ func (c *ContactController) Get(ctx *fiber.Ctx) error {
 		ID:     ctx.Params("contactId"),
 	}
 
-	response, err := c.UseCase.Get(ctx.UserContext(), request)
+	response, err := c.UseCase.Get(ctx.Context(), request)
 	if err != nil {
-		c.Log.WithError(err).Error("error getting contact")
+		c.Log.Error("error getting contact", "error", err)
 		return err
 	}
 
 	return ctx.JSON(model.WebResponse[*model.ContactResponse]{Data: response})
 }
 
-func (c *ContactController) Update(ctx *fiber.Ctx) error {
+func (c *ContactController) Update(ctx fiber.Ctx) error {
 	auth := middleware.GetUser(ctx)
 
 	request := new(model.UpdateContactRequest)
-	if err := ctx.BodyParser(request); err != nil {
-		c.Log.WithError(err).Error("error parsing request body")
+	if err := ctx.Bind().Body(request); err != nil {
+		c.Log.Error("error parsing request body", "error", err)
 		return fiber.ErrBadRequest
 	}
 
 	request.UserId = auth.ID
 	request.ID = ctx.Params("contactId")
 
-	response, err := c.UseCase.Update(ctx.UserContext(), request)
+	response, err := c.UseCase.Update(ctx.Context(), request)
 	if err != nil {
-		c.Log.WithError(err).Error("error updating contact")
+		c.Log.Error("error updating contact", "error", err)
 		return err
 	}
 
 	return ctx.JSON(model.WebResponse[*model.ContactResponse]{Data: response})
 }
 
-func (c *ContactController) Delete(ctx *fiber.Ctx) error {
+func (c *ContactController) Delete(ctx fiber.Ctx) error {
 	auth := middleware.GetUser(ctx)
 	contactId := ctx.Params("contactId")
 
@@ -119,8 +119,8 @@ func (c *ContactController) Delete(ctx *fiber.Ctx) error {
 		ID:     contactId,
 	}
 
-	if err := c.UseCase.Delete(ctx.UserContext(), request); err != nil {
-		c.Log.WithError(err).Error("error deleting contact")
+	if err := c.UseCase.Delete(ctx.Context(), request); err != nil {
+		c.Log.Error("error deleting contact", "error", err)
 		return err
 	}
 

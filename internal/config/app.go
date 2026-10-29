@@ -7,11 +7,11 @@ import (
 	"golang-clean-architecture/internal/gateway/messaging"
 	"golang-clean-architecture/internal/repository"
 	"golang-clean-architecture/internal/usecase"
+	"log/slog"
 
 	"github.com/IBM/sarama"
 	"github.com/go-playground/validator/v10"
-	"github.com/gofiber/fiber/v2"
-	"github.com/sirupsen/logrus"
+	"github.com/gofiber/fiber/v3"
 	"github.com/spf13/viper"
 	"gorm.io/gorm"
 )
@@ -19,7 +19,7 @@ import (
 type BootstrapConfig struct {
 	DB       *gorm.DB
 	App      *fiber.App
-	Log      *logrus.Logger
+	Log      *slog.Logger
 	Validate *validator.Validate
 	Config   *viper.Viper
 	Producer sarama.SyncProducer
