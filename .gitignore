@@ -1,1 +1,25 @@
+# IDE
 .idea
+.vscode/
+
+# Build output (go build ./cmd/web, ./cmd/worker)
+/bin/
+/web
+/worker
+*.exe
+
+# Test and coverage artifacts
+*.test
+*.out
+coverage.html
+
+# Local secrets (environment overrides for config.json)
+.env
+.env.*
+
+# JetBrains HTTP Client private environment (tokens, passwords)
+http-client.private.env.json
+
+# OS
+.DS_Store
+Thumbs.db
