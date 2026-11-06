@@ -4,12 +4,12 @@ import (
 	"context"
 	"golang-clean-architecture/internal/config"
 	"golang-clean-architecture/internal/delivery/messaging"
+	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
-	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
@@ -20,41 +20,37 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go RunUserConsumer(logger, viperConfig, ctx)
-	go RunContactConsumer(logger, viperConfig, ctx)
-	go RunAddressConsumer(logger, viperConfig, ctx)
+	var wg sync.WaitGroup
+	wg.Go(func() { RunUserConsumer(logger, viperConfig, ctx) })
+	wg.Go(func() { RunContactConsumer(logger, viperConfig, ctx) })
+	wg.Go(func() { RunAddressConsumer(logger, viperConfig, ctx) })
 
 	terminateSignals := make(chan os.Signal, 1)
-	signal.Notify(terminateSignals, syscall.SIGINT, syscall.SIGKILL, syscall.SIGTERM)
+	signal.Notify(terminateSignals, syscall.SIGINT, syscall.SIGTERM)
 
-	stop := false
-	for !stop {
-		select {
-		case s := <-terminateSignals:
-			logger.Info("Got one of stop signals, shutting down worker gracefully, SIGNAL NAME :", s)
-			cancel()
-			stop = true
-		}
-	}
+	s := <-terminateSignals
+	logger.Info("Got stop signal, shutting down worker gracefully", "signal", s.String())
+	cancel()
 
-	time.Sleep(5 * time.Second) // wait for all consumers to finish processing
+	wg.Wait() // wait for all consumers to close their consumer groups
+	logger.Info("Worker stopped")
 }
 
-func RunAddressConsumer(logger *logrus.Logger, viperConfig *viper.Viper, ctx context.Context) {
+func RunAddressConsumer(logger *slog.Logger, viperConfig *viper.Viper, ctx context.Context) {
 	logger.Info("setup address consumer")
 	addressConsumerGroup := config.NewKafkaConsumerGroup(viperConfig, logger)
 	addressHandler := messaging.NewAddressConsumer(logger)
 	messaging.ConsumeTopic(ctx, addressConsumerGroup, "addresses", logger, addressHandler.Consume)
 }
 
-func RunContactConsumer(logger *logrus.Logger, viperConfig *viper.Viper, ctx context.Context) {
+func RunContactConsumer(logger *slog.Logger, viperConfig *viper.Viper, ctx context.Context) {
 	logger.Info("setup contact consumer")
 	contactConsumerGroup := config.NewKafkaConsumerGroup(viperConfig, logger)
 	contactHandler := messaging.NewContactConsumer(logger)
 	messaging.ConsumeTopic(ctx, contactConsumerGroup, "contacts", logger, contactHandler.Consume)
 }
 
-func RunUserConsumer(logger *logrus.Logger, viperConfig *viper.Viper, ctx context.Context) {
+func RunUserConsumer(logger *slog.Logger, viperConfig *viper.Viper, ctx context.Context) {
 	logger.Info("setup user consumer")
 	userConsumerGroup := config.NewKafkaConsumerGroup(viperConfig, logger)
 	userHandler := messaging.NewUserConsumer(logger)

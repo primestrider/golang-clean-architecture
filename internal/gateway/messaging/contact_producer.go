@@ -2,16 +2,16 @@ package messaging
 
 import (
 	"golang-clean-architecture/internal/model"
+	"log/slog"
 
 	"github.com/IBM/sarama"
-	"github.com/sirupsen/logrus"
 )
 
 type ContactProducer struct {
 	Producer[*model.ContactEvent]
 }
 
-func NewContactProducer(producer sarama.SyncProducer, log *logrus.Logger) *ContactProducer {
+func NewContactProducer(producer sarama.SyncProducer, log *slog.Logger) *ContactProducer {
 	return &ContactProducer{
 		Producer: Producer[*model.ContactEvent]{
 			Producer: producer,

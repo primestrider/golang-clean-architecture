@@ -2,16 +2,17 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-func NewDatabase(viper *viper.Viper, log *logrus.Logger) *gorm.DB {
+func NewDatabase(viper *viper.Viper, log *slog.Logger) *gorm.DB {
 	username := viper.GetString("database.username")
 	password := viper.GetString("database.password")
 	host := viper.GetString("database.host")
@@ -24,7 +25,7 @@ func NewDatabase(viper *viper.Viper, log *logrus.Logger) *gorm.DB {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local", username, password, host, port, database)
 
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger: logger.New(&logrusWriter{Logger: log}, logger.Config{
+		Logger: logger.New(&slogWriter{Logger: log}, logger.Config{
 			SlowThreshold:             time.Second * 5,
 			Colorful:                  false,
 			IgnoreRecordNotFoundError: true,
@@ -33,12 +34,14 @@ func NewDatabase(viper *viper.Viper, log *logrus.Logger) *gorm.DB {
 		}),
 	})
 	if err != nil {
-		log.Fatalf("failed to connect database: %v", err)
+		log.Error("failed to connect database", "error", err)
+		os.Exit(1)
 	}
 
 	connection, err := db.DB()
 	if err != nil {
-		log.Fatalf("failed to connect database: %v", err)
+		log.Error("failed to connect database", "error", err)
+		os.Exit(1)
 	}
 
 	connection.SetMaxIdleConns(idleConnection)
@@ -48,10 +51,10 @@ func NewDatabase(viper *viper.Viper, log *logrus.Logger) *gorm.DB {
 	return db
 }
 
-type logrusWriter struct {
-	Logger *logrus.Logger
+type slogWriter struct {
+	Logger *slog.Logger
 }
 
-func (l *logrusWriter) Printf(message string, args ...interface{}) {
-	l.Logger.Tracef(message, args...)
+func (l *slogWriter) Printf(message string, args ...any) {
+	l.Logger.Debug(fmt.Sprintf(message, args...))
 }

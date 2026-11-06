@@ -3,17 +3,17 @@ package repository
 import (
 	"golang-clean-architecture/internal/entity"
 	"golang-clean-architecture/internal/model"
+	"log/slog"
 
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
 type ContactRepository struct {
 	Repository[entity.Contact]
-	Log *logrus.Logger
+	Log *slog.Logger
 }
 
-func NewContactRepository(log *logrus.Logger) *ContactRepository {
+func NewContactRepository(log *slog.Logger) *ContactRepository {
 	return &ContactRepository{
 		Log: log,
 	}

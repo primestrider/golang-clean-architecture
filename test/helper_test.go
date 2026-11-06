@@ -1,6 +1,7 @@
 package test
 
 import (
+	"fmt"
 	"golang-clean-architecture/internal/entity"
 	"strconv"
 	"testing"
@@ -18,21 +19,21 @@ func ClearAll() {
 func ClearUsers() {
 	err := db.Where("id is not null").Delete(&entity.User{}).Error
 	if err != nil {
-		log.Fatalf("Failed clear user data : %+v", err)
+		panic(fmt.Errorf("failed clear user data: %w", err))
 	}
 }
 
 func ClearContact() {
 	err := db.Where("id is not null").Delete(&entity.Contact{}).Error
 	if err != nil {
-		log.Fatalf("Failed clear contact data : %+v", err)
+		panic(fmt.Errorf("failed clear contact data: %w", err))
 	}
 }
 
 func ClearAddresses() {
 	err := db.Where("id is not null").Delete(&entity.Address{}).Error
 	if err != nil {
-		log.Fatalf("Failed clear address data : %+v", err)
+		panic(fmt.Errorf("failed clear address data: %w", err))
 	}
 }
 
@@ -48,7 +49,7 @@ func CreateContacts(user *entity.User, total int) {
 		}
 		err := db.Create(contact).Error
 		if err != nil {
-			log.Fatalf("Failed create contact data : %+v", err)
+			panic(fmt.Errorf("failed create contact data: %w", err))
 		}
 	}
 }

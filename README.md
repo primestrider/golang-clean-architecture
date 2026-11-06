@@ -28,12 +28,12 @@ This is golang clean architecture template.
 
 ## Framework & Library
 
-- GoFiber (HTTP Framework) : https://github.com/gofiber/fiber
+- GoFiber v3 (HTTP Framework) : https://github.com/gofiber/fiber
 - GORM (ORM) : https://github.com/go-gorm/gorm
 - Viper (Configuration) : https://github.com/spf13/viper
 - Golang Migrate (Database Migration) : https://github.com/golang-migrate/migrate
 - Go Playground Validator (Validation) : https://github.com/go-playground/validator
-- Logrus (Logger) : https://github.com/sirupsen/logrus
+- log/slog (Logger, Go standard library) : https://pkg.go.dev/log/slog
 - Sarama (Kafka Client) : https://github.com/IBM/sarama
 
 ## Configuration

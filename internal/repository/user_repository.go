@@ -2,17 +2,17 @@ package repository
 
 import (
 	"golang-clean-architecture/internal/entity"
+	"log/slog"
 
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
 type UserRepository struct {
 	Repository[entity.User]
-	Log *logrus.Logger
+	Log *slog.Logger
 }
 
-func NewUserRepository(log *logrus.Logger) *UserRepository {
+func NewUserRepository(log *slog.Logger) *UserRepository {
 	return &UserRepository{
 		Log: log,
 	}
