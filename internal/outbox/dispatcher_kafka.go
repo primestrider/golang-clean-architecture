@@ -3,6 +3,8 @@ package outbox
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net"
 
 	"github.com/IBM/sarama"
 	"github.com/primestrider/golang-clean-architecture/internal/entity"
@@ -37,7 +39,25 @@ func (d *KafkaDispatcher) Dispatch(_ context.Context, e entity.OutboxEvent) erro
 		Value:   sarama.ByteEncoder(e.Payload),
 		Headers: headers,
 	})
+	if err != nil && isUnavailable(err) {
+		return Unavailable(err)
+	}
 	return err
+}
+
+// isUnavailable melaporkan apakah error berasal dari broker yang tidak bisa
+// dihubungi, bukan dari pesan itu sendiri (misalnya pesan terlalu besar).
+func isUnavailable(err error) bool {
+	var netErr net.Error
+	return errors.Is(err, sarama.ErrOutOfBrokers) ||
+		errors.Is(err, sarama.ErrNotConnected) ||
+		errors.Is(err, sarama.ErrBrokerNotAvailable) ||
+		errors.Is(err, sarama.ErrLeaderNotAvailable) ||
+		errors.Is(err, sarama.ErrNotLeaderForPartition) ||
+		errors.Is(err, sarama.ErrRequestTimedOut) ||
+		errors.Is(err, sarama.ErrClosedClient) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.As(err, &netErr)
 }
 
 // decodeHeaders membaca kolom headers (JSON) menjadi map. Nilai yang tidak

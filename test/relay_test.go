@@ -92,7 +92,7 @@ type flakyDispatcher struct {
 
 func (d *flakyDispatcher) Dispatch(context.Context, entity.OutboxEvent) error {
 	if d.down.Load() {
-		return errors.New("kafka: broker not available")
+		return outbox.Unavailable(errors.New("kafka: client has run out of available brokers"))
 	}
 	d.sent.Add(1)
 	return nil
@@ -107,16 +107,20 @@ func TestRelay_BrokerDownKeepsPendingThenPublishes(t *testing.T) {
 	dispatcher.down.Store(true)
 	relay := outbox.NewRelay(repository.NewOutboxRepository(app.DB), dispatcher,
 		outbox.NewMySQLLocker(app.DB, "test-relay-outage"),
-		outbox.Options{PollInterval: 20 * time.Millisecond, BatchSize: 100, MaxAttempts: 1000},
+		// MaxAttempts default (10): gangguan broker tidak boleh membuat event diparkir.
+		outbox.Options{PollInterval: 20 * time.Millisecond, BatchSize: 100, MaxAttempts: 10},
 		slog.New(slog.DiscardHandler))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { _ = relay.Run(ctx); close(done) }()
 	t.Cleanup(func() { cancel(); <-done })
 
-	require.Eventually(t, func() bool { return statusOf(t, app, ids[0]).Attempts >= 2 }, 5*time.Second, 20*time.Millisecond)
+	// Tunggu jauh lebih lama dari 10 putaran (MaxAttempts) selama broker mati.
+	time.Sleep(600 * time.Millisecond)
 	for _, id := range ids {
-		assert.Equal(t, entity.OutboxPending, statusOf(t, app, id).Status)
+		row := statusOf(t, app, id)
+		assert.Equal(t, entity.OutboxPending, row.Status)
+		assert.Zero(t, row.Attempts, "broker outages must not count as failed attempts")
 	}
 
 	dispatcher.down.Store(false)

@@ -11,11 +11,24 @@ package outbox
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/primestrider/golang-clean-architecture/internal/entity"
 )
+
+// ErrUnavailable menandai kegagalan karena tujuan pengiriman tidak bisa
+// dihubungi (broker Kafka mati, server email down, jaringan putus). Ini
+// gangguan infrastruktur, bukan kesalahan event, jadi tidak dihitung sebagai
+// percobaan gagal dan event tidak pernah diparkir karenanya.
+var ErrUnavailable = errors.New("destination unavailable")
+
+// Unavailable membungkus err sebagai ErrUnavailable.
+func Unavailable(err error) error {
+	return fmt.Errorf("%w: %w", ErrUnavailable, err)
+}
 
 // Repository adalah akses tabel outbox yang dibutuhkan relay.
 type Repository interface {
@@ -113,7 +126,9 @@ func (r *Relay) Run(ctx context.Context) error {
 // Bila satu event gagal, event berikutnya dengan aggregate yang sama di
 // batch ini tidak dikirim, supaya urutan per aggregate tidak terbalik.
 // Event itu dicoba lagi di putaran berikutnya; setelah max_attempts kali
-// gagal, repository menandainya failed (diparkir).
+// gagal, repository menandainya failed (diparkir). Kegagalan karena tujuan
+// tidak bisa dihubungi (ErrUnavailable) tidak dihitung: batch langsung
+// berhenti dan semua event tetap pending.
 func (r *Relay) ProcessBatch(ctx context.Context) (int, error) {
 	events, err := r.repo.FetchPending(ctx, r.cfg.BatchSize)
 	if err != nil {
@@ -123,10 +138,22 @@ func (r *Relay) ProcessBatch(ctx context.Context) (int, error) {
 	blocked := map[string]bool{}
 	published, failed := 0, 0
 	for _, e := range events {
+		// Berhenti di sela event bila worker sedang shutdown.
+		if err := ctx.Err(); err != nil {
+			return published, err
+		}
 		if blocked[e.AggregateID] {
 			continue
 		}
 		if err := r.dispatcher.Dispatch(ctx, e); err != nil {
+			if errors.Is(err, ErrUnavailable) {
+				// Tujuan sedang tidak bisa dihubungi: event lain di batch ini
+				// pasti gagal juga. Hentikan batch tanpa menghitung percobaan;
+				// semua event tetap pending dan dicoba lagi di putaran berikutnya.
+				r.log.WarnContext(ctx, "outbox destination unavailable, will retry", "error", err)
+				failed++
+				break
+			}
 			blocked[e.AggregateID] = true
 			failed++
 			r.log.WarnContext(ctx, "dispatch outbox event failed",

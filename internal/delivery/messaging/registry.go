@@ -9,6 +9,7 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/entity"
 	"github.com/primestrider/golang-clean-architecture/internal/model"
 	"github.com/primestrider/golang-clean-architecture/internal/observability"
+	"github.com/primestrider/golang-clean-architecture/internal/outbox"
 	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 )
 
@@ -133,5 +134,11 @@ func (d *LocalDispatcher) Dispatch(ctx context.Context, row entity.OutboxEvent) 
 		_ = json.Unmarshal(row.Headers, &headers)
 	}
 	ctx = observability.ExtractContext(ctx, headers)
-	return d.registry.Handle(ctx, e)
+	// Kegagalan handler lokal (misalnya server email down) diperlakukan
+	// sebagai gangguan sementara: event tetap pending dan dicoba lagi, tidak
+	// diparkir, sama seperti saat broker Kafka mati.
+	if err := d.registry.Handle(ctx, e); err != nil {
+		return outbox.Unavailable(err)
+	}
+	return nil
 }

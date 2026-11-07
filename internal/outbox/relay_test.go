@@ -127,3 +127,41 @@ func TestRun_PublishesWhenLeader(t *testing.T) {
 
 	assert.Contains(t, dispatcher.sent, "A1")
 }
+
+// unavailableDispatcher mensimulasikan broker yang tidak bisa dihubungi.
+type unavailableDispatcher struct{ calls int }
+
+func (d *unavailableDispatcher) Dispatch(context.Context, entity.OutboxEvent) error {
+	d.calls++
+	return Unavailable(errors.New("kafka: client has run out of available brokers"))
+}
+
+// TestProcessBatch_UnavailableDestinationDoesNotCountAttempts: gangguan
+// infrastruktur (broker mati) bukan kesalahan event. Event tidak boleh
+// diparkir; batch berhenti dan dicoba lagi di putaran berikutnya.
+func TestProcessBatch_UnavailableDestinationDoesNotCountAttempts(t *testing.T) {
+	repo := &fakeRepo{pending: []entity.OutboxEvent{event("A1", "a"), event("B1", "b")}}
+	dispatcher := &unavailableDispatcher{}
+	relay := NewRelay(repo, dispatcher, &fakeLocker{acquired: true}, testCfg(), slog.New(slog.DiscardHandler))
+
+	for range 15 { // lebih banyak dari MaxAttempts default (10)
+		_, err := relay.ProcessBatch(context.Background())
+		require.NoError(t, err)
+	}
+
+	assert.Empty(t, repo.failed, "no attempt may be counted for an unavailable destination")
+	assert.Equal(t, 15, dispatcher.calls, "the batch stops at the first unavailable error")
+}
+
+func TestProcessBatch_StopsWhenContextCancelled(t *testing.T) {
+	repo := &fakeRepo{pending: []entity.OutboxEvent{event("A1", "a"), event("B1", "b")}}
+	dispatcher := &fakeDispatcher{}
+	relay := NewRelay(repo, dispatcher, &fakeLocker{acquired: true}, testCfg(), slog.New(slog.DiscardHandler))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := relay.ProcessBatch(ctx)
+
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Empty(t, dispatcher.sent)
+}
