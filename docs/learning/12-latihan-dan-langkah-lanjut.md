@@ -38,7 +38,27 @@
 14. Tambahkan manifest Kubernetes (Deployment, Service, probe liveness dan
     readiness, preStop hook).
 15. Ukur performa `GET /api/v1/contacts` dengan `k6` atau `hey`, lalu lihat
-    metrik p95 di Prometheus. Coba aktifkan Redis cache dan bandingkan.
+    metrik p95 di Prometheus. Coba aktifkan Redis cache dan bandingkan
+    (lihat [bab 14](14-performa.md)).
+
+Latihan khusus integrasi layanan dan performa ada di akhir
+[bab 13](13-integrasi-layanan.md) dan [bab 14](14-performa.md).
+
+## Topik di luar cakupan repo ini
+
+Topik berikut umum di backend tetapi belum ada contohnya di repo. Setelah
+menguasai materi di atas, ini kandidat yang baik untuk dipelajari
+berikutnya:
+
+| Topik | Kapan dibutuhkan | Titik awal |
+|---|---|---|
+| WebSocket / Server-Sent Events | Notifikasi real-time, chat | middleware websocket dari `gofiber/contrib`, atau SSE dengan `c.SendStreamWriter` |
+| Job queue dengan prioritas dan jadwal ulang | Pekerjaan berat per item (render PDF, ekspor) | `github.com/hibiken/asynq` (berbasis Redis) |
+| Pencarian teks penuh | Pencarian yang lebih pintar dari `LIKE` | MySQL FULLTEXT, Meilisearch, OpenSearch |
+| Multi-tenancy | SaaS dengan banyak organisasi | Kolom `tenant_id` di setiap query, atau database per tenant |
+| Feature flag | Rilis bertahap | OpenFeature |
+| Kubernetes | Deploy berskala | Deployment, Service, probe ke `/health/live` dan `/health/ready` |
+| GraphQL | Client butuh bentuk data yang fleksibel | `github.com/99designs/gqlgen` (delivery ketiga di atas use case yang sama) |
 
 ## Ringkasan prinsip yang dipakai di repo ini
 

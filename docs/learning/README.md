@@ -47,6 +47,13 @@ backend.
 | [11 Tutorial: membangun fitur "Catatan Kontak"](11-tutorial-fitur-baru.md) | Fitur lengkap dari migrasi sampai test, mengikuti pola repo |
 | [12 Latihan dan langkah lanjut](12-latihan-dan-langkah-lanjut.md) | Daftar latihan bertingkat dan bahan bacaan lanjutan |
 
+### Bagian 4: Topik lanjutan
+
+| Bab | Isi |
+|---|---|
+| [13 Integrasi layanan](13-integrasi-layanan.md) | Redis cache dan invalidasi, scheduler dan distributed lock, upload ke S3 dan presigned URL, email lewat event |
+| [14 Performa](14-performa.md) | Offset vs keyset pagination, benchmark, pprof, load test, fuzzing |
+
 ## Konvensi di materi ini
 
 - `internal/usecase/contact_usecase.go:42` berarti file dan nomor baris
