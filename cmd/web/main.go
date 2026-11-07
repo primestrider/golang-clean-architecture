@@ -6,7 +6,10 @@ import (
 )
 
 func main() {
-	viperConfig := config.NewViper()
+	viperConfig, err := config.Load()
+	if err != nil {
+		panic(err)
+	}
 	log := config.NewLogger(viperConfig)
 	db := config.NewDatabase(viperConfig, log)
 	validate := config.NewValidator(viperConfig)
@@ -22,8 +25,8 @@ func main() {
 		Producer: producer,
 	})
 
-	webPort := viperConfig.GetInt("web.port")
-	err := app.Listen(fmt.Sprintf(":%d", webPort))
+	webPort := viperConfig.Server.Port
+	err = app.Listen(fmt.Sprintf(":%d", webPort))
 	if err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

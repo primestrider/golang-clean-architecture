@@ -12,7 +12,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 	"gorm.io/gorm"
 )
 
@@ -21,7 +20,7 @@ type BootstrapConfig struct {
 	App      *fiber.App
 	Log      *logrus.Logger
 	Validate *validator.Validate
-	Config   *viper.Viper
+	Config   *Config
 	Producer sarama.SyncProducer
 }
 

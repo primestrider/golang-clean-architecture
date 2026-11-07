@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 )
 
 func main() {
-	viperConfig := config.NewViper()
+	viperConfig, err := config.Load()
+	if err != nil {
+		panic(err)
+	}
 	logger := config.NewLogger(viperConfig)
 	logger.Info("Starting worker service")
 
@@ -40,21 +42,21 @@ func main() {
 	time.Sleep(5 * time.Second) // wait for all consumers to finish processing
 }
 
-func RunAddressConsumer(logger *logrus.Logger, viperConfig *viper.Viper, ctx context.Context) {
+func RunAddressConsumer(logger *logrus.Logger, viperConfig *config.Config, ctx context.Context) {
 	logger.Info("setup address consumer")
 	addressConsumerGroup := config.NewKafkaConsumerGroup(viperConfig, logger)
 	addressHandler := messaging.NewAddressConsumer(logger)
 	messaging.ConsumeTopic(ctx, addressConsumerGroup, "addresses", logger, addressHandler.Consume)
 }
 
-func RunContactConsumer(logger *logrus.Logger, viperConfig *viper.Viper, ctx context.Context) {
+func RunContactConsumer(logger *logrus.Logger, viperConfig *config.Config, ctx context.Context) {
 	logger.Info("setup contact consumer")
 	contactConsumerGroup := config.NewKafkaConsumerGroup(viperConfig, logger)
 	contactHandler := messaging.NewContactConsumer(logger)
 	messaging.ConsumeTopic(ctx, contactConsumerGroup, "contacts", logger, contactHandler.Consume)
 }
 
-func RunUserConsumer(logger *logrus.Logger, viperConfig *viper.Viper, ctx context.Context) {
+func RunUserConsumer(logger *logrus.Logger, viperConfig *config.Config, ctx context.Context) {
 	logger.Info("setup user consumer")
 	userConsumerGroup := config.NewKafkaConsumerGroup(viperConfig, logger)
 	userHandler := messaging.NewUserConsumer(logger)

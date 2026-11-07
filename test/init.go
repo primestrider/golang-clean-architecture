@@ -6,7 +6,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 	"gorm.io/gorm"
 )
 
@@ -14,14 +13,18 @@ var app *fiber.App
 
 var db *gorm.DB
 
-var viperConfig *viper.Viper
+var viperConfig *config.Config
 
 var log *logrus.Logger
 
 var validate *validator.Validate
 
 func init() {
-	viperConfig = config.NewViper()
+	var err error
+	viperConfig, err = config.Load()
+	if err != nil {
+		panic(err)
+	}
 	log = config.NewLogger(viperConfig)
 	validate = config.NewValidator(viperConfig)
 	app = config.NewFiber(viperConfig)

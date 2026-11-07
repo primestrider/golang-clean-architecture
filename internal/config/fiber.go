@@ -2,12 +2,11 @@ package config
 
 import (
 	"github.com/gofiber/fiber/v3"
-	"github.com/spf13/viper"
 )
 
-func NewFiber(config *viper.Viper) *fiber.App {
+func NewFiber(config *Config) *fiber.App {
 	var app = fiber.New(fiber.Config{
-		AppName:      config.GetString("app.name"),
+		AppName:      config.App.Name,
 		ErrorHandler: NewErrorHandler(),
 	})
 

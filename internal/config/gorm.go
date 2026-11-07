@@ -5,21 +5,20 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-func NewDatabase(viper *viper.Viper, log *logrus.Logger) *gorm.DB {
-	username := viper.GetString("database.username")
-	password := viper.GetString("database.password")
-	host := viper.GetString("database.host")
-	port := viper.GetInt("database.port")
-	database := viper.GetString("database.name")
-	idleConnection := viper.GetInt("database.pool.idle")
-	maxConnection := viper.GetInt("database.pool.max")
-	maxLifeTimeConnection := viper.GetInt("database.pool.lifetime")
+func NewDatabase(cfg *Config, log *logrus.Logger) *gorm.DB {
+	username := cfg.Database.Username
+	password := cfg.Database.Password
+	host := cfg.Database.Host
+	port := cfg.Database.Port
+	database := cfg.Database.Name
+	idleConnection := cfg.Database.Pool.Idle
+	maxConnection := cfg.Database.Pool.Max
+	maxLifeTimeConnection := cfg.Database.Pool.Lifetime
 
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local", username, password, host, port, database)
 
@@ -43,7 +42,7 @@ func NewDatabase(viper *viper.Viper, log *logrus.Logger) *gorm.DB {
 
 	connection.SetMaxIdleConns(idleConnection)
 	connection.SetMaxOpenConns(maxConnection)
-	connection.SetConnMaxLifetime(time.Second * time.Duration(maxLifeTimeConnection))
+	connection.SetConnMaxLifetime(maxLifeTimeConnection)
 
 	return db
 }
