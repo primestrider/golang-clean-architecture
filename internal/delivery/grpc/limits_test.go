@@ -43,13 +43,14 @@ func TestLimiterKey_GroupsIPv6ByPrefix(t *testing.T) {
 	assert.Equal(t, "198.51.100.7", limiterKey("198.51.100.7"))
 }
 
-func TestIPLimiter_HardCapSharesOverflowBucket(t *testing.T) {
+func TestIPLimiter_EvictsLeastRecentlyUsedWhenFull(t *testing.T) {
 	l := newIPLimiter(1)
 	l.maxKeys = 2
 
 	assert.True(t, l.allow("a"))
 	assert.True(t, l.allow("b"))
-	assert.True(t, l.allow("c"), "first new key beyond the cap uses the overflow bucket")
-	assert.False(t, l.allow("d"), "all keys beyond the cap share one bucket")
-	assert.LessOrEqual(t, len(l.perKey), 2)
+	assert.False(t, l.allow("a"), "a has used its budget; this also marks a as most recent")
+	assert.True(t, l.allow("c"), "new client gets its own bucket by evicting the least recently used (b)")
+	assert.False(t, l.allow("a"), "a keeps its exhausted bucket: eviction must not reset recently active clients")
+	assert.Equal(t, 2, l.size())
 }

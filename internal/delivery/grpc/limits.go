@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"container/list"
 	"context"
 	"net"
 	"net/netip"
@@ -29,46 +30,41 @@ func timeoutInterceptor(d time.Duration) grpc.UnaryServerInterceptor {
 	}
 }
 
-// Batas memori limiter: jumlah maksimum key yang dilacak dan seberapa sering
-// key yang tidak aktif dibersihkan.
-const (
-	defaultMaxLimiterKeys = 10000
-	limiterSweepInterval  = time.Minute
-	limiterIdleTTL        = 10 * time.Minute
-	overflowKey           = "overflow"
-)
+// defaultMaxLimiterKeys adalah jumlah maksimum client yang dilacak limiter.
+const defaultMaxLimiterKeys = 10000
 
 // ipLimiter adalah rate limiter token bucket per client, disimpan di memori
 // proses ini (untuk beberapa instance, batasnya berlaku per instance).
 //
-// Jumlah key dibatasi keras (maxKeys). Bila penuh, client baru berbagi satu
-// bucket "overflow", sehingga banjir alamat palsu tidak bisa menghabiskan
-// memori, dan dampaknya hanya mengenai client yang berada di bucket itu.
+// Jumlah client yang dilacak dibatasi (maxKeys) dengan strategi LRU: bila
+// penuh, client yang paling lama tidak aktif dikeluarkan untuk memberi
+// tempat client baru. Semua operasi O(1), jadi banjir alamat baru tidak
+// membebani CPU, dan setiap client tetap punya bucket sendiri. Untuk
+// serangan dari puluhan ribu IP sekaligus, pertahanan sebaiknya dipasang di
+// edge (WAF atau load balancer), bukan di dalam aplikasi.
 type ipLimiter struct {
-	mu        sync.Mutex
-	perKey    map[string]*limiterEntry
-	overflow  *rate.Limiter
-	limit     rate.Limit
-	burst     int
-	maxKeys   int
-	lastSweep time.Time
+	mu      sync.Mutex
+	entries map[string]*list.Element
+	order   *list.List // depan = paling baru dipakai
+	limit   rate.Limit
+	burst   int
+	maxKeys int
 }
 
-// limiterEntry adalah bucket satu client beserta waktu terakhir terlihat.
-type limiterEntry struct {
-	limiter  *rate.Limiter
-	lastSeen time.Time
+// lruEntry adalah satu client di dalam LRU.
+type lruEntry struct {
+	key     string
+	limiter *rate.Limiter
 }
 
 // newIPLimiter membuat limiter dengan batas perMinute request per client.
 func newIPLimiter(perMinute int) *ipLimiter {
-	limit := rate.Limit(float64(perMinute) / 60)
 	return &ipLimiter{
-		perKey:   map[string]*limiterEntry{},
-		overflow: rate.NewLimiter(limit, perMinute),
-		limit:    limit,
-		burst:    perMinute,
-		maxKeys:  defaultMaxLimiterKeys,
+		entries: map[string]*list.Element{},
+		order:   list.New(),
+		limit:   rate.Limit(float64(perMinute) / 60),
+		burst:   perMinute,
+		maxKeys: defaultMaxLimiterKeys,
 	}
 }
 
@@ -77,32 +73,29 @@ func newIPLimiter(perMinute int) *ipLimiter {
 func (l *ipLimiter) allow(key string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	now := time.Now()
 
-	if entry, ok := l.perKey[key]; ok {
-		entry.lastSeen = now
+	if el, ok := l.entries[key]; ok {
+		l.order.MoveToFront(el)
+		entry, _ := el.Value.(*lruEntry)
 		return entry.limiter.Allow()
 	}
-	if len(l.perKey) >= l.maxKeys && now.Sub(l.lastSweep) >= limiterSweepInterval {
-		l.sweep(now)
+	if l.order.Len() >= l.maxKeys {
+		oldest := l.order.Back()
+		l.order.Remove(oldest)
+		if entry, ok := oldest.Value.(*lruEntry); ok {
+			delete(l.entries, entry.key)
+		}
 	}
-	if len(l.perKey) >= l.maxKeys {
-		return l.overflow.Allow()
-	}
-	entry := &limiterEntry{limiter: rate.NewLimiter(l.limit, l.burst), lastSeen: now}
-	l.perKey[key] = entry
+	entry := &lruEntry{key: key, limiter: rate.NewLimiter(l.limit, l.burst)}
+	l.entries[key] = l.order.PushFront(entry)
 	return entry.limiter.Allow()
 }
 
-// sweep membuang key yang tidak aktif. Dipanggil paling sering sekali per
-// limiterSweepInterval, supaya biaya penyapuan tidak ditanggung setiap request.
-func (l *ipLimiter) sweep(now time.Time) {
-	for k, e := range l.perKey {
-		if now.Sub(e.lastSeen) > limiterIdleTTL {
-			delete(l.perKey, k)
-		}
-	}
-	l.lastSweep = now
+// size mengembalikan jumlah client yang sedang dilacak.
+func (l *ipLimiter) size() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.order.Len()
 }
 
 // limiterKey mengubah IP menjadi key rate limit. Alamat IPv6 dikelompokkan
