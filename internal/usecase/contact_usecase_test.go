@@ -2,7 +2,9 @@ package usecase_test
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/primestrider/golang-clean-architecture/internal/apperror"
 	"github.com/primestrider/golang-clean-architecture/internal/entity"
@@ -19,6 +21,7 @@ type contactFixture struct {
 	contacts  *mocks.ContactRepository
 	addresses *mocks.AddressRepository
 	events    *mocks.EventPublisher
+	cache     *mocks.Cache
 	uc        *usecase.ContactUseCase
 }
 
@@ -28,8 +31,9 @@ func newContactFixture(t *testing.T) *contactFixture {
 		contacts:  mocks.NewContactRepository(t),
 		addresses: mocks.NewAddressRepository(t),
 		events:    mocks.NewEventPublisher(t),
+		cache:     mocks.NewCache(t),
 	}
-	f.uc = usecase.NewContactUseCase(discardLogger(), newValidator(), f.tx, f.contacts, f.addresses, f.events, newAudit())
+	f.uc = usecase.NewContactUseCase(discardLogger(), newValidator(), f.tx, f.contacts, f.addresses, f.events, newAudit(), f.cache)
 	return f
 }
 
@@ -55,6 +59,7 @@ func TestContactGet_InvalidIDIsValidationError(t *testing.T) {
 func TestContactGet_NotOwnedIsNotFound(t *testing.T) {
 	f := newContactFixture(t)
 	id := "6f1c1f0e-4b7a-4c64-9d7e-6a0b7a1d2c3e"
+	f.cache.EXPECT().Get(mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
 	f.contacts.EXPECT().FindByIDAndUserID(mock.Anything, id, "u1").Return(nil, apperror.NotFound("contact"))
 
 	_, err := f.uc.Get(context.Background(), &model.GetContactRequest{UserID: "u1", ID: id})
@@ -99,4 +104,59 @@ func TestContactSearch_BuildsPaging(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, res, 2)
 	assert.Equal(t, &model.PageMetadata{Page: 2, Size: 10, TotalItem: 21, TotalPage: 3}, paging)
+}
+
+const cachedContactID = "6f1c1f0e-4b7a-4c64-9d7e-6a0b7a1d2c3e"
+
+func TestContactGet_CacheHitSkipsRepo(t *testing.T) {
+	f := newContactFixture(t)
+	f.cache.EXPECT().Get(mock.Anything, "contact:u1:"+cachedContactID, mock.Anything).
+		RunAndReturn(func(_ context.Context, _ string, dst any) (bool, error) {
+			*dst.(*model.ContactResponse) = model.ContactResponse{ID: cachedContactID, FirstName: "Cached"}
+			return true, nil
+		})
+
+	res, err := f.uc.Get(context.Background(), &model.GetContactRequest{UserID: "u1", ID: cachedContactID})
+
+	require.NoError(t, err)
+	assert.Equal(t, "Cached", res.FirstName)
+	// contacts.FindByIDAndUserID tidak di-EXPECT: repo tidak boleh dipanggil.
+}
+
+func TestContactGet_CacheMissLoadsAndStores(t *testing.T) {
+	f := newContactFixture(t)
+	f.cache.EXPECT().Get(mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	f.contacts.EXPECT().FindByIDAndUserID(mock.Anything, cachedContactID, "u1").Return(&entity.Contact{ID: cachedContactID, FirstName: "Budi"}, nil)
+	f.cache.EXPECT().Set(mock.Anything, "contact:u1:"+cachedContactID, mock.Anything, 5*time.Minute).Return(nil).Once()
+
+	res, err := f.uc.Get(context.Background(), &model.GetContactRequest{UserID: "u1", ID: cachedContactID})
+
+	require.NoError(t, err)
+	assert.Equal(t, "Budi", res.FirstName)
+}
+
+func TestContactGet_CacheErrorFallsBackToRepo(t *testing.T) {
+	f := newContactFixture(t)
+	f.cache.EXPECT().Get(mock.Anything, mock.Anything, mock.Anything).Return(false, errors.New("redis down"))
+	f.contacts.EXPECT().FindByIDAndUserID(mock.Anything, cachedContactID, "u1").Return(&entity.Contact{ID: cachedContactID}, nil)
+	f.cache.EXPECT().Set(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("redis down"))
+
+	_, err := f.uc.Get(context.Background(), &model.GetContactRequest{UserID: "u1", ID: cachedContactID})
+
+	assert.NoError(t, err, "cache failures must never fail the request")
+}
+
+func TestContactUpdate_InvalidatesCacheAfterCommit(t *testing.T) {
+	f := newContactFixture(t)
+	f.contacts.EXPECT().FindByIDAndUserID(mock.Anything, cachedContactID, "u1").Return(&entity.Contact{ID: cachedContactID, Version: 1}, nil)
+	f.contacts.EXPECT().UpdateWithVersion(mock.Anything, mock.Anything, 1).Return(nil)
+	f.events.EXPECT().Publish(mock.Anything, mock.Anything).Return(nil)
+	f.cache.EXPECT().Delete(mock.Anything, []string{"contact:u1:" + cachedContactID}).RunAndReturn(func(context.Context, ...string) error {
+		assert.False(t, f.tx.inTx, "cache must be invalidated after the transaction commits")
+		return nil
+	}).Once()
+
+	_, err := f.uc.Update(context.Background(), &model.UpdateContactRequest{UserID: "u1", ID: cachedContactID, FirstName: "Baru", Version: 1})
+
+	require.NoError(t, err)
 }

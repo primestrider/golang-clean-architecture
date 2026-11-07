@@ -6,13 +6,16 @@ import (
 
 	fiberotel "github.com/gofiber/contrib/v3/otel"
 	"github.com/gofiber/fiber/v3"
+	redisstorage "github.com/gofiber/storage/redis/v3"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/http"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/http/middleware"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/http/route"
+	"github.com/primestrider/golang-clean-architecture/internal/gateway/cache"
 	"github.com/primestrider/golang-clean-architecture/internal/observability"
 	"github.com/primestrider/golang-clean-architecture/internal/repository"
 	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 	"github.com/primestrider/golang-clean-architecture/internal/validation"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
@@ -25,6 +28,9 @@ type WebDeps struct {
 	App    *fiber.App
 	// Metrics mencatat metrik HTTP; wajib diisi.
 	Metrics *observability.Metrics
+	// Redis opsional (nil bila dimatikan): dipakai untuk cache dan storage
+	// rate limiter bersama antar instance.
+	Redis *redis.Client
 }
 
 // BootstrapWeb merangkai seluruh aplikasi web: repository, use case,
@@ -45,10 +51,18 @@ func BootstrapWeb(deps *WebDeps) {
 	// Publisher event: event ditulis ke tabel outbox di transaksi bisnis.
 	events := usecase.NewOutboxPublisher(repository.NewOutboxRepository(deps.DB))
 
+	// Cache dan storage rate limiter: Redis bila aktif, selain itu memori.
+	var contactCache usecase.Cache = cache.NoopCache{}
+	var limiterStorage fiber.Storage
+	if deps.Redis != nil {
+		contactCache = cache.NewRedisCache(deps.Redis)
+		limiterStorage = redisstorage.NewFromConnection(deps.Redis)
+	}
+
 	// Use case: logika bisnis.
 	validate := validation.New()
 	userUseCase := usecase.NewUserUseCase(deps.Log, validate, tx, userRepository, refreshTokenRepository, events, audit)
-	contactUseCase := usecase.NewContactUseCase(deps.Log, validate, tx, contactRepository, addressRepository, events, audit)
+	contactUseCase := usecase.NewContactUseCase(deps.Log, validate, tx, contactRepository, addressRepository, events, audit, contactCache)
 	authUseCase := usecase.NewAuthUseCase(usecase.AuthDeps{
 		Log:        deps.Log,
 		Validate:   validate,
@@ -67,6 +81,7 @@ func BootstrapWeb(deps *WebDeps) {
 		CORSOrigins:     deps.Config.Server.CORSOrigins,
 		RequestTimeout:  deps.Config.Server.RequestTimeout,
 		GlobalPerMinute: deps.Config.RateLimit.GlobalPerMinute,
+		Storage:         limiterStorage,
 		// Tracing lebih dulu supaya span mencakup seluruh pemrosesan request.
 		// Filter pencarian di query string adalah data pribadi, jadi nilainya
 		// disamarkan di atribut span.
@@ -85,11 +100,11 @@ func BootstrapWeb(deps *WebDeps) {
 		AddressController:    http.NewAddressController(addressUseCase),
 		AdminController:      http.NewAdminController(adminUseCase),
 		AuthMiddleware:       middleware.NewAuth(tokens),
-		AuthIPEmailRateLimit: middleware.NewRateLimiter(authLimit, time.Minute, middleware.IPAndEmailKey("auth-ip-email"), nil),
-		AuthIPRateLimit:      middleware.NewRateLimiter(deps.Config.RateLimit.AuthIPPerMinute, time.Minute, middleware.IPKey("auth-ip"), nil),
+		AuthIPEmailRateLimit: middleware.NewRateLimiter(authLimit, time.Minute, middleware.IPAndEmailKey("auth-ip-email"), limiterStorage),
+		AuthIPRateLimit:      middleware.NewRateLimiter(deps.Config.RateLimit.AuthIPPerMinute, time.Minute, middleware.IPKey("auth-ip"), limiterStorage),
 		AuthEmailRateLimit: middleware.NewFailureRateLimiter(deps.Config.RateLimit.AuthEmailFailuresPerMinute, time.Minute,
-			middleware.EmailKey("auth-email"), nil),
-		RefreshRateLimit: middleware.NewRateLimiter(authLimit, time.Minute, middleware.IPKey("refresh"), nil),
+			middleware.EmailKey("auth-email"), limiterStorage),
+		RefreshRateLimit: middleware.NewRateLimiter(authLimit, time.Minute, middleware.IPKey("refresh"), limiterStorage),
 	}
 	routes.Setup()
 }

@@ -95,3 +95,11 @@ type AuditRepository interface {
 type OutboxRepository interface {
 	Insert(ctx context.Context, events ...entity.OutboxEvent) error
 }
+
+// Cache adalah penyimpanan sementara key-value (misalnya Redis).
+type Cache interface {
+	// Get mengisi dst dengan nilai key. Mengembalikan false bila key tidak ada.
+	Get(ctx context.Context, key string, dst any) (bool, error)
+	Set(ctx context.Context, key string, value any, ttl time.Duration) error
+	Delete(ctx context.Context, keys ...string) error
+}

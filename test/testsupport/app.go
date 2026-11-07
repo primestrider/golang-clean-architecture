@@ -56,8 +56,13 @@ func NewWebApp(t testing.TB, opts ...Option) *TestApp {
 	Reset(t, db)
 
 	metrics := observability.NewMetrics(prometheus.NewRegistry())
+	redisClient, err := config.NewRedis(cfg)
+	require.NoError(t, err)
+	if redisClient != nil {
+		t.Cleanup(func() { _ = redisClient.Close() })
+	}
 	app := config.NewFiber(cfg, log)
-	config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics})
+	config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics, Redis: redisClient})
 	return &TestApp{App: app, DB: db, Cfg: cfg, Metrics: metrics}
 }
 

@@ -61,12 +61,19 @@ func run() error {
 	metrics := observability.NewMetrics(registry)
 	metrics.Register(collectors.NewDBStatsCollector(sqlDB, cfg.Database.Name))
 
-	app := config.NewFiber(cfg, log)
-	config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics})
+	redisClient, err := config.NewRedis(cfg)
+	if err != nil {
+		return err
+	}
 
-	adminServer := admin.NewServer(fmt.Sprintf(":%d", cfg.Admin.Port), log, map[string]admin.Check{
-		"db": sqlDB.PingContext,
-	})
+	app := config.NewFiber(cfg, log)
+	config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics, Redis: redisClient})
+
+	checks := map[string]admin.Check{"db": sqlDB.PingContext}
+	if redisClient != nil {
+		checks["redis"] = func(ctx context.Context) error { return redisClient.Ping(ctx).Err() }
+	}
+	adminServer := admin.NewServer(fmt.Sprintf(":%d", cfg.Admin.Port), log, checks)
 	adminServer.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 
 	// ctx dibatalkan saat menerima SIGINT (Ctrl+C) atau SIGTERM (dikirim
@@ -101,6 +108,9 @@ func run() error {
 	errs := []error{runErr}
 	errs = append(errs, app.ShutdownWithContext(shutdownCtx))
 	errs = append(errs, adminServer.Shutdown(shutdownCtx))
+	if redisClient != nil {
+		errs = append(errs, redisClient.Close())
+	}
 	errs = append(errs, sqlDB.Close())
 	errs = append(errs, shutdownTracing(shutdownCtx))
 
