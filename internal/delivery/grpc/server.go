@@ -7,6 +7,7 @@
 package grpc
 
 import (
+	"context"
 	"log/slog"
 	"time"
 
@@ -85,4 +86,23 @@ func NewServer(opts ServerOptions) *grpc.Server {
 	}
 	serverMetrics.InitializeMetrics(server)
 	return server
+}
+
+// Shutdown menghentikan server dengan anggun: menunggu RPC yang sedang
+// berjalan selesai, tetapi tidak melewati batas waktu ctx. Tanpa batas ini,
+// stream yang tidak pernah selesai (misalnya health Watch dari load
+// balancer) akan menahan shutdown selamanya. Setelah batas waktu, koneksi
+// yang tersisa diputus paksa.
+func Shutdown(ctx context.Context, server *grpc.Server) {
+	done := make(chan struct{})
+	go func() {
+		server.GracefulStop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		server.Stop()
+		<-done
+	}
 }

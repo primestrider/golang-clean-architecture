@@ -20,6 +20,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/primestrider/golang-clean-architecture/internal/config"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/admin"
+	deliverygrpc "github.com/primestrider/golang-clean-architecture/internal/delivery/grpc"
 	"github.com/primestrider/golang-clean-architecture/internal/gateway/storage"
 	"github.com/primestrider/golang-clean-architecture/internal/observability"
 	"github.com/primestrider/golang-clean-architecture/internal/usecase"
@@ -134,8 +135,8 @@ func run() error {
 	errs := []error{runErr}
 	errs = append(errs, app.ShutdownWithContext(shutdownCtx))
 	if grpcServer != nil {
-		// GracefulStop menunggu RPC yang sedang berjalan selesai.
-		grpcServer.GracefulStop()
+		// Menunggu RPC yang sedang berjalan, paling lama sampai shutdownCtx habis.
+		deliverygrpc.Shutdown(shutdownCtx, grpcServer)
 	}
 	errs = append(errs, adminServer.Shutdown(shutdownCtx))
 	if redisClient != nil {
