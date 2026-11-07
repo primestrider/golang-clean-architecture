@@ -57,6 +57,7 @@
   "otel": {
     "enabled": false,
     "endpoint": "localhost:4317",
+    "insecure": false,
     "service_name": "golang-clean-architecture",
     "sample_ratio": 1.0
   },

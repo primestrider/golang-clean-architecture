@@ -30,8 +30,10 @@ func NewDatabase(cfg *Config, log *slog.Logger) (*gorm.DB, error) {
 
 	// Plugin tracing membuat setiap query menjadi span anak dari request
 	// yang memicunya. Metrik GORM dimatikan karena statistik pool sudah
-	// dicatat lewat collector Prometheus.
-	if err := db.Use(tracing.NewPlugin(tracing.WithoutMetrics())); err != nil {
+	// dicatat lewat collector Prometheus. WithoutQueryVariables menyimpan SQL
+	// dengan placeholder (?) saja, tanpa nilai parameter, supaya data pribadi
+	// dan hash password tidak ikut terkirim ke sistem tracing.
+	if err := db.Use(tracing.NewPlugin(tracing.WithoutMetrics(), tracing.WithoutQueryVariables())); err != nil {
 		return nil, fmt.Errorf("enable gorm tracing: %w", err)
 	}
 

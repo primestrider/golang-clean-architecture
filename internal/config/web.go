@@ -68,7 +68,12 @@ func BootstrapWeb(deps *WebDeps) {
 		RequestTimeout:  deps.Config.Server.RequestTimeout,
 		GlobalPerMinute: deps.Config.RateLimit.GlobalPerMinute,
 		// Tracing lebih dulu supaya span mencakup seluruh pemrosesan request.
-		Extra: []fiber.Handler{fiberotel.New(), deps.Metrics.HTTPMiddleware()},
+		// Filter pencarian di query string adalah data pribadi, jadi nilainya
+		// disamarkan di atribut span.
+		Extra: []fiber.Handler{
+			fiberotel.New(fiberotel.WithRedactedQueryParams("name", "email", "phone")),
+			deps.Metrics.HTTPMiddleware(),
+		},
 	}, deps.Log)
 
 	authLimit := deps.Config.RateLimit.AuthPerMinute

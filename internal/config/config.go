@@ -186,8 +186,11 @@ type EmailConfig struct {
 
 // OTelConfig mengatur tracing OpenTelemetry.
 type OTelConfig struct {
-	Enabled     bool    `mapstructure:"enabled"`
-	Endpoint    string  `mapstructure:"endpoint"`
+	Enabled  bool   `mapstructure:"enabled"`
+	Endpoint string `mapstructure:"endpoint"`
+	// Insecure mengirim span tanpa TLS. Hanya untuk collector lokal
+	// (misalnya Jaeger di docker-compose); default false memakai TLS.
+	Insecure    bool    `mapstructure:"insecure"`
 	ServiceName string  `mapstructure:"service_name"`
 	SampleRatio float64 `mapstructure:"sample_ratio"`
 }

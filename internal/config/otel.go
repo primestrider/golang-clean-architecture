@@ -25,10 +25,13 @@ func NewTracerProvider(ctx context.Context, cfg *Config) (func(context.Context) 
 		return func(context.Context) error { return nil }, nil
 	}
 
-	exporter, err := otlptracegrpc.New(ctx,
-		otlptracegrpc.WithEndpoint(cfg.OTel.Endpoint),
-		otlptracegrpc.WithInsecure(),
-	)
+	opts := []otlptracegrpc.Option{otlptracegrpc.WithEndpoint(cfg.OTel.Endpoint)}
+	if cfg.OTel.Insecure {
+		// Plaintext hanya bila diminta eksplisit; selain itu exporter memakai
+		// TLS dengan sertifikat sistem.
+		opts = append(opts, otlptracegrpc.WithInsecure())
+	}
+	exporter, err := otlptracegrpc.New(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create otlp exporter: %w", err)
 	}
