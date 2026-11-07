@@ -66,7 +66,10 @@ type ServerConfig struct {
 // AdminConfig mengatur server admin internal (health check dan metrics).
 // Port-nya dipisah dari port publik supaya metrics tidak terekspos ke internet.
 type AdminConfig struct {
-	Port int `mapstructure:"port"`
+	// Port dipakai binary web, WorkerPort dipakai binary worker, supaya
+	// keduanya bisa berjalan di mesin yang sama.
+	Port       int `mapstructure:"port"`
+	WorkerPort int `mapstructure:"worker_port"`
 }
 
 // GRPCConfig mengatur server gRPC opsional.

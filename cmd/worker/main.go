@@ -1,76 +1,91 @@
+// Command worker menjalankan pekerjaan latar belakang: consumer Kafka
+// (dan, di tahap berikutnya, outbox relay serta scheduler) beserta server
+// admin untuk health check dan metrics.
+//
+// Seperti binary web, worker melakukan graceful shutdown saat menerima
+// SIGINT/SIGTERM: berhenti mengambil pesan baru, menunggu pesan yang
+// sedang diproses selesai, lalu keluar.
 package main
 
 import (
 	"context"
-	"github.com/primestrider/golang-clean-architecture/internal/config"
-	"github.com/primestrider/golang-clean-architecture/internal/delivery/messaging"
+	"errors"
+	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
-	"time"
 
-	"log/slog"
+	"github.com/primestrider/golang-clean-architecture/internal/config"
+	"github.com/primestrider/golang-clean-architecture/internal/delivery/admin"
+	"github.com/primestrider/golang-clean-architecture/internal/delivery/messaging"
 )
 
 func main() {
-	viperConfig, err := config.Load()
-	if err != nil {
-		panic(err)
+	if err := run(); err != nil {
+		slog.Error("worker stopped with error", "error", err)
+		os.Exit(1)
 	}
-	logger := config.NewLogger(viperConfig)
-	logger.Info("Starting worker service")
+}
 
-	ctx, cancel := context.WithCancel(context.Background())
+// run berisi seluruh logika main; lihat cmd/web untuk alasan pemisahannya.
+func run() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	log := config.NewLogger(cfg).With("component", "worker")
 
-	go RunUserConsumer(logger, viperConfig, ctx)
-	go RunContactConsumer(logger, viperConfig, ctx)
-	go RunAddressConsumer(logger, viperConfig, ctx)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	terminateSignals := make(chan os.Signal, 1)
-	signal.Notify(terminateSignals, syscall.SIGINT, syscall.SIGKILL, syscall.SIGTERM)
+	adminServer := admin.NewServer(fmt.Sprintf(":%d", cfg.Admin.WorkerPort), log, map[string]admin.Check{})
+	adminErr := make(chan error, 1)
+	go func() { adminErr <- adminServer.Start() }()
 
-	stop := false
-	for !stop {
-		select {
-		case s := <-terminateSignals:
-			logger.Info("shutdown signal received", "signal", s.String())
-			cancel()
-			stop = true
+	// Setiap pekerjaan latar belakang didaftarkan ke WaitGroup supaya saat
+	// shutdown kita bisa menunggu semuanya selesai.
+	var wg sync.WaitGroup
+	if cfg.Kafka.Enabled {
+		consumers := map[string]messaging.ConsumerHandler{
+			"users":     messaging.NewUserConsumer(log).Consume,
+			"contacts":  messaging.NewContactConsumer(log).Consume,
+			"addresses": messaging.NewAddressConsumer(log).Consume,
 		}
+		for topic, handler := range consumers {
+			group, err := config.NewKafkaConsumerGroup(cfg)
+			if err != nil {
+				return err
+			}
+			wg.Go(func() { messaging.ConsumeTopic(ctx, group, topic, log, handler) })
+		}
+	} else {
+		log.Info("kafka disabled, consumers not started")
 	}
 
-	time.Sleep(5 * time.Second) // wait for all consumers to finish processing
-}
-
-func RunAddressConsumer(logger *slog.Logger, viperConfig *config.Config, ctx context.Context) {
-	logger.Info("setup address consumer")
-	addressConsumerGroup, err := config.NewKafkaConsumerGroup(viperConfig)
-	if err != nil {
-		logger.Error("create consumer group failed", "error", err)
-		return
+	var runErr error
+	select {
+	case <-ctx.Done():
+		log.Info("shutdown signal received")
+	case runErr = <-adminErr:
+		log.Error("admin server stopped unexpectedly", "error", runErr)
+		stop()
 	}
-	addressHandler := messaging.NewAddressConsumer(logger)
-	messaging.ConsumeTopic(ctx, addressConsumerGroup, "addresses", logger, addressHandler.Consume)
-}
 
-func RunContactConsumer(logger *slog.Logger, viperConfig *config.Config, ctx context.Context) {
-	logger.Info("setup contact consumer")
-	contactConsumerGroup, err := config.NewKafkaConsumerGroup(viperConfig)
-	if err != nil {
-		logger.Error("create consumer group failed", "error", err)
-		return
-	}
-	contactHandler := messaging.NewContactConsumer(logger)
-	messaging.ConsumeTopic(ctx, contactConsumerGroup, "contacts", logger, contactHandler.Consume)
-}
+	adminServer.SetReady(false)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Shutdown.Timeout)
+	defer cancel()
 
-func RunUserConsumer(logger *slog.Logger, viperConfig *config.Config, ctx context.Context) {
-	logger.Info("setup user consumer")
-	userConsumerGroup, err := config.NewKafkaConsumerGroup(viperConfig)
-	if err != nil {
-		logger.Error("create consumer group failed", "error", err)
-		return
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-shutdownCtx.Done():
+		log.Warn("shutdown timeout reached before background jobs finished")
 	}
-	userHandler := messaging.NewUserConsumer(logger)
-	messaging.ConsumeTopic(ctx, userConsumerGroup, "users", logger, userHandler.Consume)
+
+	err = errors.Join(runErr, adminServer.Shutdown(shutdownCtx))
+	log.Info("shutdown complete")
+	return err
 }
