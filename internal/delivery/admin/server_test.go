@@ -50,7 +50,8 @@ func TestReady_FailsWhenCheckFails(t *testing.T) {
 
 	assert.Equal(t, http.StatusServiceUnavailable, code)
 	assert.Equal(t, "unavailable", body["status"])
-	assert.Equal(t, "connection refused", body["checks"].(map[string]any)["db"])
+	// Detail error hanya masuk log, tidak dikirim ke pemanggil endpoint.
+	assert.Equal(t, "unavailable", body["checks"].(map[string]any)["db"])
 }
 
 func TestReady_503AfterSetReadyFalse(t *testing.T) {

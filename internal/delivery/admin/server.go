@@ -87,17 +87,19 @@ func (s *Server) readiness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Pemanggil hanya menerima nama check dan status generik. Detail error
+	// (bisa berisi host, port, atau nama database) hanya dicatat di log.
 	failed := map[string]string{}
 	for name, check := range s.checks {
 		ctx, cancel := context.WithTimeout(r.Context(), checkTimeout)
 		err := check(ctx)
 		cancel()
 		if err != nil {
-			failed[name] = err.Error()
+			failed[name] = "unavailable"
+			s.log.Warn("readiness check failed", "check", name, "error", err)
 		}
 	}
 	if len(failed) > 0 {
-		s.log.Warn("readiness check failed", "checks", failed)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "unavailable", "checks": failed})
 		return
 	}
