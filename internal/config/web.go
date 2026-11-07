@@ -129,7 +129,7 @@ func BootstrapWeb(deps *WebDeps) *WebComponents {
 		AuthIPRateLimit:      middleware.NewRateLimiter(deps.Config.RateLimit.AuthIPPerMinute, time.Minute, middleware.IPKey("auth-ip"), limiterStorage),
 		AuthEmailRateLimit: middleware.NewFailureRateLimiter(deps.Config.RateLimit.AuthEmailFailuresPerMinute, time.Minute,
 			middleware.EmailKey("auth-email"), limiterStorage),
-		RefreshRateLimit: middleware.NewRateLimiter(authLimit, time.Minute, middleware.IPKey("refresh"), limiterStorage),
+		RefreshRateLimit: middleware.NewRateLimiter(deps.Config.RateLimit.RefreshPerMinute, time.Minute, middleware.IPKey("refresh"), limiterStorage),
 	}
 	routes.Setup()
 

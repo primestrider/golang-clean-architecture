@@ -254,3 +254,15 @@ func TestHTTPMetricsRecordedForAPIRequests(t *testing.T) {
 
 	assert.InDelta(t, 1, testutil.ToFloat64(app.Metrics.HTTPRequests.WithLabelValues("GET", "/api/v1/users/_current", "200")), 0)
 }
+
+// TestRefreshRateLimit_AllowsManyUsersBehindOneIP: refresh dipanggil semua
+// pengguna setiap ~15 menit. Banyak pengguna di belakang satu IP (kantor,
+// NAT operator seluler) tidak boleh langsung kena 429 setelah 5 refresh.
+func TestRefreshRateLimit_AllowsManyUsersBehindOneIP(t *testing.T) {
+	app := testsupport.NewWebApp(t)
+
+	for i := range 10 {
+		resp, _ := app.Do(t, http.MethodPost, "/api/v1/auth/refresh", model.RefreshRequest{RefreshToken: "token-" + strconv.Itoa(i)}, "")
+		require.NotEqual(t, http.StatusTooManyRequests, resp.StatusCode, "refresh #%d was rate limited", i+1)
+	}
+}
