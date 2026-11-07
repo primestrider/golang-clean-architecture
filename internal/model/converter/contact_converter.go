@@ -20,7 +20,7 @@ func ContactToResponse(contact *entity.Contact) *model.ContactResponse {
 func ContactToEvent(contact *entity.Contact) *model.ContactEvent {
 	return &model.ContactEvent{
 		ID:        contact.ID,
-		UserID:    contact.UserId,
+		UserID:    contact.UserID,
 		FirstName: contact.FirstName,
 		LastName:  contact.LastName,
 		Email:     contact.Email,

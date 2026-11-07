@@ -1,30 +1,31 @@
 package repository
 
 import (
-	"github.com/primestrider/golang-clean-architecture/internal/entity"
+	"context"
 
+	"github.com/primestrider/golang-clean-architecture/internal/entity"
 	"gorm.io/gorm"
-	"log/slog"
 )
 
+// AddressRepository mengakses tabel addresses.
 type AddressRepository struct {
 	Repository[entity.Address]
-	Log *slog.Logger
 }
 
-func NewAddressRepository(log *slog.Logger) *AddressRepository {
-	return &AddressRepository{
-		Log: log,
-	}
+// NewAddressRepository membuat AddressRepository.
+func NewAddressRepository(db *gorm.DB) *AddressRepository {
+	return &AddressRepository{Repository: Repository[entity.Address]{DB: db, Name: "address"}}
 }
 
-func (r *AddressRepository) FindByIdAndContactId(tx *gorm.DB, address *entity.Address, id string, contactId string) error {
-	return tx.Where("id = ? AND contact_id = ?", id, contactId).First(address).Error
+// FindByIDAndContactID mencari alamat milik kontak tertentu.
+func (r *AddressRepository) FindByIDAndContactID(ctx context.Context, id, contactID string) (*entity.Address, error) {
+	return r.take(r.db(ctx).Where("id = ? AND contact_id = ?", id, contactID))
 }
 
-func (r *AddressRepository) FindAllByContactId(tx *gorm.DB, contactId string) ([]entity.Address, error) {
+// FindAllByContactID mengembalikan semua alamat milik sebuah kontak.
+func (r *AddressRepository) FindAllByContactID(ctx context.Context, contactID string) ([]entity.Address, error) {
 	var addresses []entity.Address
-	if err := tx.Where("contact_id = ?", contactId).Find(&addresses).Error; err != nil {
+	if err := r.db(ctx).Where("contact_id = ?", contactID).Order("created_at").Find(&addresses).Error; err != nil {
 		return nil, err
 	}
 	return addresses, nil

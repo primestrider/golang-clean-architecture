@@ -2,199 +2,127 @@ package usecase
 
 import (
 	"context"
+	"log/slog"
+
+	"github.com/google/uuid"
 	"github.com/primestrider/golang-clean-architecture/internal/entity"
-	"github.com/primestrider/golang-clean-architecture/internal/gateway/messaging"
 	"github.com/primestrider/golang-clean-architecture/internal/model"
 	"github.com/primestrider/golang-clean-architecture/internal/model/converter"
-	"github.com/primestrider/golang-clean-architecture/internal/repository"
-
-	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
 	"github.com/primestrider/golang-clean-architecture/internal/validation"
-	"gorm.io/gorm"
-	"log/slog"
 )
 
+// ContactUseCase berisi aturan bisnis untuk kontak milik user.
 type ContactUseCase struct {
-	DB                *gorm.DB
-	Log               *slog.Logger
-	Validate          *validation.Validator
-	ContactRepository *repository.ContactRepository
-	ContactProducer   *messaging.ContactProducer
+	log      *slog.Logger
+	validate *validation.Validator
+	tx       Transactor
+	contacts ContactRepository
+	events   EventPublisher
 }
 
-func NewContactUseCase(db *gorm.DB, logger *slog.Logger, validate *validation.Validator,
-	contactRepository *repository.ContactRepository, contactProducer *messaging.ContactProducer) *ContactUseCase {
-	return &ContactUseCase{
-		DB:                db,
-		Log:               logger,
-		Validate:          validate,
-		ContactRepository: contactRepository,
-		ContactProducer:   contactProducer,
-	}
+// NewContactUseCase membuat ContactUseCase dengan dependency-nya.
+func NewContactUseCase(log *slog.Logger, validate *validation.Validator, tx Transactor,
+	contacts ContactRepository, events EventPublisher) *ContactUseCase {
+	return &ContactUseCase{log: log, validate: validate, tx: tx, contacts: contacts, events: events}
 }
 
-func (c *ContactUseCase) Create(ctx context.Context, request *model.CreateContactRequest) (*model.ContactResponse, error) {
-	tx := c.DB.WithContext(ctx).Begin()
-	defer tx.Rollback()
-
-	if err := c.Validate.Struct(request); err != nil {
-		c.Log.Error("error validating request body", "error", err)
-		return nil, fiber.ErrBadRequest
+// Create membuat kontak baru untuk user yang login. Penyimpanan kontak dan
+// penerbitan event terjadi dalam satu transaksi: keduanya berhasil, atau
+// keduanya batal.
+func (c *ContactUseCase) Create(ctx context.Context, req *model.CreateContactRequest) (*model.ContactResponse, error) {
+	if err := c.validate.Struct(req); err != nil {
+		return nil, err
 	}
 
 	contact := &entity.Contact{
-		ID:        uuid.New().String(),
-		FirstName: request.FirstName,
-		LastName:  request.LastName,
-		Email:     request.Email,
-		Phone:     request.Phone,
-		UserId:    request.UserId,
+		ID:        uuid.NewString(),
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Email:     req.Email,
+		Phone:     req.Phone,
+		UserID:    req.UserID,
 	}
 
-	if err := c.ContactRepository.Create(tx, contact); err != nil {
-		c.Log.Error("error creating contact", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.Log.Error("error creating contact", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
-	if c.ContactProducer != nil {
-		event := converter.ContactToEvent(contact)
-		if err := c.ContactProducer.Send(event); err != nil {
-			c.Log.Error("error publishing contact created event", "error", err)
-			return nil, fiber.ErrInternalServerError
+	err := c.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		if err := c.contacts.Create(ctx, contact); err != nil {
+			return err
 		}
-		c.Log.Info("Published contact created event")
-	} else {
-		c.Log.Info("Kafka producer is disabled, skipping contact created event")
-	}
-
-	return converter.ContactToResponse(contact), nil
-}
-
-func (c *ContactUseCase) Update(ctx context.Context, request *model.UpdateContactRequest) (*model.ContactResponse, error) {
-	tx := c.DB.WithContext(ctx).Begin()
-	defer tx.Rollback()
-
-	contact := new(entity.Contact)
-	if err := c.ContactRepository.FindByIdAndUserId(tx, contact, request.ID, request.UserId); err != nil {
-		c.Log.Error("error getting contact", "error", err)
-		return nil, fiber.ErrNotFound
-	}
-
-	if err := c.Validate.Struct(request); err != nil {
-		c.Log.Error("error validating request body", "error", err)
-		return nil, fiber.ErrBadRequest
-	}
-
-	contact.FirstName = request.FirstName
-	contact.LastName = request.LastName
-	contact.Email = request.Email
-	contact.Phone = request.Phone
-
-	if err := c.ContactRepository.Update(tx, contact); err != nil {
-		c.Log.Error("error updating contact", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.Log.Error("error updating contact", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
-	if c.ContactProducer != nil {
-		event := converter.ContactToEvent(contact)
-		if err := c.ContactProducer.Send(event); err != nil {
-			c.Log.Error("error publishing contact updated event", "error", err)
-			return nil, fiber.ErrInternalServerError
-		}
-		c.Log.Info("Published contact updated event")
-	} else {
-		c.Log.Info("Kafka producer is disabled, skipping contact updated event")
-	}
-
-	return converter.ContactToResponse(contact), nil
-}
-
-func (c *ContactUseCase) Get(ctx context.Context, request *model.GetContactRequest) (*model.ContactResponse, error) {
-	tx := c.DB.WithContext(ctx).Begin()
-	defer tx.Rollback()
-
-	if err := c.Validate.Struct(request); err != nil {
-		c.Log.Error("error validating request body", "error", err)
-		return nil, fiber.ErrBadRequest
-	}
-
-	contact := new(entity.Contact)
-	if err := c.ContactRepository.FindByIdAndUserId(tx, contact, request.ID, request.UserId); err != nil {
-		c.Log.Error("error getting contact", "error", err)
-		return nil, fiber.ErrNotFound
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.Log.Error("error getting contact", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
-	return converter.ContactToResponse(contact), nil
-}
-
-func (c *ContactUseCase) Delete(ctx context.Context, request *model.DeleteContactRequest) error {
-	tx := c.DB.WithContext(ctx).Begin()
-	defer tx.Rollback()
-
-	if err := c.Validate.Struct(request); err != nil {
-		c.Log.Error("error validating request body", "error", err)
-		return fiber.ErrBadRequest
-	}
-
-	contact := new(entity.Contact)
-	if err := c.ContactRepository.FindByIdAndUserId(tx, contact, request.ID, request.UserId); err != nil {
-		c.Log.Error("error getting contact", "error", err)
-		return fiber.ErrNotFound
-	}
-
-	if err := c.ContactRepository.Delete(tx, contact); err != nil {
-		c.Log.Error("error deleting contact", "error", err)
-		return fiber.ErrInternalServerError
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.Log.Error("error deleting contact", "error", err)
-		return fiber.ErrInternalServerError
-	}
-
-	return nil
-}
-
-func (c *ContactUseCase) Search(ctx context.Context, request *model.SearchContactRequest) ([]model.ContactResponse, int64, error) {
-	tx := c.DB.WithContext(ctx).Begin()
-	defer tx.Rollback()
-
-	if err := c.Validate.Struct(request); err != nil {
-		c.Log.Error("error validating request body", "error", err)
-		return nil, 0, fiber.ErrBadRequest
-	}
-
-	contacts, total, err := c.ContactRepository.Search(tx, request)
+		return c.events.Publish(ctx, converter.ContactToEvent(contact))
+	})
 	if err != nil {
-		c.Log.Error("error getting contacts", "error", err)
-		return nil, 0, fiber.ErrInternalServerError
+		return nil, err
+	}
+	return converter.ContactToResponse(contact), nil
+}
+
+// Update mengubah kontak milik user yang login.
+func (c *ContactUseCase) Update(ctx context.Context, req *model.UpdateContactRequest) (*model.ContactResponse, error) {
+	if err := c.validate.Struct(req); err != nil {
+		return nil, err
 	}
 
-	if err := tx.Commit().Error; err != nil {
-		c.Log.Error("error getting contacts", "error", err)
-		return nil, 0, fiber.ErrInternalServerError
+	var contact *entity.Contact
+	err := c.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		var err error
+		contact, err = c.contacts.FindByIDAndUserID(ctx, req.ID, req.UserID)
+		if err != nil {
+			return err
+		}
+		contact.FirstName = req.FirstName
+		contact.LastName = req.LastName
+		contact.Email = req.Email
+		contact.Phone = req.Phone
+		if err := c.contacts.Update(ctx, contact); err != nil {
+			return err
+		}
+		return c.events.Publish(ctx, converter.ContactToEvent(contact))
+	})
+	if err != nil {
+		return nil, err
+	}
+	return converter.ContactToResponse(contact), nil
+}
+
+// Get mengambil satu kontak milik user yang login. Operasi baca tidak
+// membuka transaksi.
+func (c *ContactUseCase) Get(ctx context.Context, req *model.GetContactRequest) (*model.ContactResponse, error) {
+	if err := c.validate.Struct(req); err != nil {
+		return nil, err
+	}
+	contact, err := c.contacts.FindByIDAndUserID(ctx, req.ID, req.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return converter.ContactToResponse(contact), nil
+}
+
+// Delete menghapus kontak milik user yang login.
+func (c *ContactUseCase) Delete(ctx context.Context, req *model.DeleteContactRequest) error {
+	if err := c.validate.Struct(req); err != nil {
+		return err
+	}
+	return c.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		contact, err := c.contacts.FindByIDAndUserID(ctx, req.ID, req.UserID)
+		if err != nil {
+			return err
+		}
+		return c.contacts.Delete(ctx, contact)
+	})
+}
+
+// Search mencari kontak milik user dengan filter dan paging.
+func (c *ContactUseCase) Search(ctx context.Context, req *model.SearchContactRequest) ([]model.ContactResponse, *model.PageMetadata, error) {
+	if err := c.validate.Struct(req); err != nil {
+		return nil, nil, err
+	}
+	contacts, total, err := c.contacts.Search(ctx, req)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	responses := make([]model.ContactResponse, len(contacts))
-	for i, contact := range contacts {
-		responses[i] = *converter.ContactToResponse(&contact)
+	for i := range contacts {
+		responses[i] = *converter.ContactToResponse(&contacts[i])
 	}
-
-	return responses, total, nil
+	return responses, model.NewPageMetadata(req.Page, req.Size, total), nil
 }

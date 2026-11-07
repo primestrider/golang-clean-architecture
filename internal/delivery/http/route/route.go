@@ -1,11 +1,12 @@
 package route
 
 import (
-	"github.com/primestrider/golang-clean-architecture/internal/delivery/http"
-
 	"github.com/gofiber/fiber/v3"
+	"github.com/primestrider/golang-clean-architecture/internal/delivery/http"
 )
 
+// RouteConfig berisi semua controller dan middleware yang dibutuhkan untuk
+// mendaftarkan route.
 type RouteConfig struct {
 	App               *fiber.App
 	UserController    *http.UserController
@@ -14,31 +15,36 @@ type RouteConfig struct {
 	AuthMiddleware    fiber.Handler
 }
 
+// Setup mendaftarkan semua route di bawah prefix /api/v1. Versi di URL
+// memungkinkan perubahan yang tidak kompatibel dirilis sebagai /api/v2
+// tanpa memutus client lama.
 func (c *RouteConfig) Setup() {
-	c.SetupGuestRoute()
-	c.SetupAuthRoute()
+	api := c.App.Group("/api/v1")
+	c.setupGuestRoutes(api)
+	c.setupAuthRoutes(api.Group("", c.AuthMiddleware))
 }
 
-func (c *RouteConfig) SetupGuestRoute() {
-	c.App.Post("/api/users", c.UserController.Register)
-	c.App.Post("/api/users/_login", c.UserController.Login)
+// setupGuestRoutes mendaftarkan endpoint yang bisa diakses tanpa login.
+func (c *RouteConfig) setupGuestRoutes(api fiber.Router) {
+	api.Post("/users", c.UserController.Register)
+	api.Post("/users/_login", c.UserController.Login)
 }
 
-func (c *RouteConfig) SetupAuthRoute() {
-	c.App.Use(c.AuthMiddleware)
-	c.App.Delete("/api/users", c.UserController.Logout)
-	c.App.Patch("/api/users/_current", c.UserController.Update)
-	c.App.Get("/api/users/_current", c.UserController.Current)
+// setupAuthRoutes mendaftarkan endpoint yang membutuhkan login.
+func (c *RouteConfig) setupAuthRoutes(api fiber.Router) {
+	api.Delete("/users", c.UserController.Logout)
+	api.Patch("/users/_current", c.UserController.Update)
+	api.Get("/users/_current", c.UserController.Current)
 
-	c.App.Get("/api/contacts", c.ContactController.List)
-	c.App.Post("/api/contacts", c.ContactController.Create)
-	c.App.Put("/api/contacts/:contactId", c.ContactController.Update)
-	c.App.Get("/api/contacts/:contactId", c.ContactController.Get)
-	c.App.Delete("/api/contacts/:contactId", c.ContactController.Delete)
+	api.Get("/contacts", c.ContactController.List)
+	api.Post("/contacts", c.ContactController.Create)
+	api.Put("/contacts/:contactId", c.ContactController.Update)
+	api.Get("/contacts/:contactId", c.ContactController.Get)
+	api.Delete("/contacts/:contactId", c.ContactController.Delete)
 
-	c.App.Get("/api/contacts/:contactId/addresses", c.AddressController.List)
-	c.App.Post("/api/contacts/:contactId/addresses", c.AddressController.Create)
-	c.App.Put("/api/contacts/:contactId/addresses/:addressId", c.AddressController.Update)
-	c.App.Get("/api/contacts/:contactId/addresses/:addressId", c.AddressController.Get)
-	c.App.Delete("/api/contacts/:contactId/addresses/:addressId", c.AddressController.Delete)
+	api.Get("/contacts/:contactId/addresses", c.AddressController.List)
+	api.Post("/contacts/:contactId/addresses", c.AddressController.Create)
+	api.Put("/contacts/:contactId/addresses/:addressId", c.AddressController.Update)
+	api.Get("/contacts/:contactId/addresses/:addressId", c.AddressController.Get)
+	api.Delete("/contacts/:contactId/addresses/:addressId", c.AddressController.Delete)
 }

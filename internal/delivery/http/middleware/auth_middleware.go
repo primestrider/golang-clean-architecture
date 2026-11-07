@@ -1,28 +1,34 @@
 package middleware
 
 import (
-	"github.com/primestrider/golang-clean-architecture/internal/model"
-	"github.com/primestrider/golang-clean-architecture/internal/usecase"
-
 	"github.com/gofiber/fiber/v3"
+	"github.com/primestrider/golang-clean-architecture/internal/model"
+	"github.com/primestrider/golang-clean-architecture/internal/observability"
+	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 )
 
-func NewAuth(userUserCase *usecase.UserUseCase) fiber.Handler {
-	return func(ctx fiber.Ctx) error {
-		request := &model.VerifyUserRequest{Token: ctx.Get("Authorization", "NOT_FOUND")}
+// authLocalsKey adalah kunci fiber.Locals untuk menyimpan identitas login.
+const authLocalsKey = "auth"
 
-		auth, err := userUserCase.Verify(ctx.Context(), request)
+// NewAuth membuat middleware yang mewajibkan token pada header
+// Authorization. Jika token valid, identitas user disimpan di Locals dan id
+// user dimasukkan ke context supaya ikut tercatat di log.
+func NewAuth(users *usecase.UserUseCase) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		req := &model.VerifyUserRequest{Token: c.Get(fiber.HeaderAuthorization)}
+		auth, err := users.Verify(c.Context(), req)
 		if err != nil {
-			userUserCase.Log.Warn("Failed find user by token", "error", err)
-			return fiber.ErrUnauthorized
+			return err
 		}
-
-		userUserCase.Log.Debug("authenticated user", "user_id", auth.ID)
-		ctx.Locals("auth", auth)
-		return ctx.Next()
+		c.Locals(authLocalsKey, auth)
+		c.SetContext(observability.WithUserID(c.Context(), auth.ID))
+		return c.Next()
 	}
 }
 
-func GetUser(ctx fiber.Ctx) *model.Auth {
-	return ctx.Locals("auth").(*model.Auth)
+// GetUser mengambil identitas user yang login. Hanya boleh dipanggil di
+// handler yang berada di belakang middleware NewAuth.
+func GetUser(c fiber.Ctx) *model.Auth {
+	auth, _ := c.Locals(authLocalsKey).(*model.Auth)
+	return auth
 }

@@ -1,29 +1,60 @@
 package repository
 
-import "gorm.io/gorm"
+import (
+	"context"
+	"errors"
 
+	"github.com/primestrider/golang-clean-architecture/internal/apperror"
+	"gorm.io/gorm"
+)
+
+// Repository adalah repository generik berisi operasi CRUD dasar untuk
+// entity T. Repository spesifik (UserRepository, ContactRepository, ...)
+// meng-embed struct ini lalu menambah query khusus miliknya.
 type Repository[T any] struct {
+	// DB adalah koneksi utama. Jangan dipakai langsung di query; selalu
+	// lewat r.db(ctx) supaya transaksi dari context ikut terpakai.
 	DB *gorm.DB
+	// Name adalah nama entity untuk pesan error, misalnya "contact".
+	Name string
 }
 
-func (r *Repository[T]) Create(db *gorm.DB, entity *T) error {
-	return db.Create(entity).Error
+// db mengembalikan koneksi yang tepat untuk ctx (transaksi atau biasa).
+func (r *Repository[T]) db(ctx context.Context) *gorm.DB {
+	return DB(ctx, r.DB)
 }
 
-func (r *Repository[T]) Update(db *gorm.DB, entity *T) error {
-	return db.Save(entity).Error
+// Create menyimpan entity baru.
+func (r *Repository[T]) Create(ctx context.Context, entity *T) error {
+	return r.db(ctx).Create(entity).Error
 }
 
-func (r *Repository[T]) Delete(db *gorm.DB, entity *T) error {
-	return db.Delete(entity).Error
+// Update menyimpan seluruh field entity.
+func (r *Repository[T]) Update(ctx context.Context, entity *T) error {
+	return r.db(ctx).Save(entity).Error
 }
 
-func (r *Repository[T]) CountById(db *gorm.DB, id any) (int64, error) {
-	var total int64
-	err := db.Model(new(T)).Where("id = ?", id).Count(&total).Error
-	return total, err
+// Delete menghapus entity.
+func (r *Repository[T]) Delete(ctx context.Context, entity *T) error {
+	return r.db(ctx).Delete(entity).Error
 }
 
-func (r *Repository[T]) FindById(db *gorm.DB, entity *T, id any) error {
-	return db.Where("id = ?", id).Take(entity).Error
+// FindByID mencari entity berdasarkan primary key. Mengembalikan
+// apperror NOT_FOUND bila tidak ada.
+func (r *Repository[T]) FindByID(ctx context.Context, id string) (*T, error) {
+	return r.take(r.db(ctx).Where("id = ?", id))
+}
+
+// take menjalankan query yang mengembalikan satu baris dan menerjemahkan
+// gorm.ErrRecordNotFound menjadi apperror NOT_FOUND. Error lain dikembalikan
+// apa adanya dan akan menjadi 500 di delivery.
+func (r *Repository[T]) take(query *gorm.DB) (*T, error) {
+	entity := new(T)
+	if err := query.Take(entity).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperror.NotFound(r.Name)
+		}
+		return nil, err
+	}
+	return entity, nil
 }

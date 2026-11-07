@@ -1,23 +1,23 @@
 package repository
 
 import (
-	"github.com/primestrider/golang-clean-architecture/internal/entity"
+	"context"
 
+	"github.com/primestrider/golang-clean-architecture/internal/entity"
 	"gorm.io/gorm"
-	"log/slog"
 )
 
+// UserRepository mengakses tabel users.
 type UserRepository struct {
 	Repository[entity.User]
-	Log *slog.Logger
 }
 
-func NewUserRepository(log *slog.Logger) *UserRepository {
-	return &UserRepository{
-		Log: log,
-	}
+// NewUserRepository membuat UserRepository.
+func NewUserRepository(db *gorm.DB) *UserRepository {
+	return &UserRepository{Repository: Repository[entity.User]{DB: db, Name: "user"}}
 }
 
-func (r *UserRepository) FindByToken(db *gorm.DB, user *entity.User, token string) error {
-	return db.Where("token = ?", token).First(user).Error
+// FindByToken mencari user berdasarkan token sesi.
+func (r *UserRepository) FindByToken(ctx context.Context, token string) (*entity.User, error) {
+	return r.take(r.db(ctx).Where("token = ?", token))
 }

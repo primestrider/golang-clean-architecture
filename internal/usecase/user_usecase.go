@@ -2,277 +2,174 @@ package usecase
 
 import (
 	"context"
+	"log/slog"
+
+	"github.com/google/uuid"
+	"github.com/primestrider/golang-clean-architecture/internal/apperror"
 	"github.com/primestrider/golang-clean-architecture/internal/entity"
-	"github.com/primestrider/golang-clean-architecture/internal/gateway/messaging"
 	"github.com/primestrider/golang-clean-architecture/internal/model"
 	"github.com/primestrider/golang-clean-architecture/internal/model/converter"
-	"github.com/primestrider/golang-clean-architecture/internal/repository"
-
-	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
 	"github.com/primestrider/golang-clean-architecture/internal/validation"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
-	"log/slog"
 )
 
+// UserUseCase berisi aturan bisnis untuk akun user: registrasi, login,
+// profil, dan logout.
 type UserUseCase struct {
-	DB             *gorm.DB
-	Log            *slog.Logger
-	Validate       *validation.Validator
-	UserRepository *repository.UserRepository
-	UserProducer   *messaging.UserProducer
+	log      *slog.Logger
+	validate *validation.Validator
+	tx       Transactor
+	users    UserRepository
+	events   EventPublisher
 }
 
-func NewUserUseCase(db *gorm.DB, logger *slog.Logger, validate *validation.Validator,
-	userRepository *repository.UserRepository, userProducer *messaging.UserProducer) *UserUseCase {
-	return &UserUseCase{
-		DB:             db,
-		Log:            logger,
-		Validate:       validate,
-		UserRepository: userRepository,
-		UserProducer:   userProducer,
+// NewUserUseCase membuat UserUseCase dengan dependency-nya.
+func NewUserUseCase(log *slog.Logger, validate *validation.Validator, tx Transactor,
+	users UserRepository, events EventPublisher) *UserUseCase {
+	return &UserUseCase{log: log, validate: validate, tx: tx, users: users, events: events}
+}
+
+// Verify mencari user pemilik token dan mengembalikan identitasnya.
+// Dipakai middleware autentikasi di setiap request yang butuh login.
+func (c *UserUseCase) Verify(ctx context.Context, req *model.VerifyUserRequest) (*model.Auth, error) {
+	if err := c.validate.Struct(req); err != nil {
+		return nil, apperror.Unauthorized("invalid token")
 	}
-}
-
-func (c *UserUseCase) Verify(ctx context.Context, request *model.VerifyUserRequest) (*model.Auth, error) {
-	tx := c.DB.WithContext(ctx).Begin()
-	defer tx.Rollback()
-
-	err := c.Validate.Struct(request)
+	user, err := c.users.FindByToken(ctx, req.Token)
 	if err != nil {
-		c.Log.Warn("Invalid request body", "error", err)
-		return nil, fiber.ErrBadRequest
+		if isNotFound(err) {
+			return nil, apperror.Unauthorized("invalid token")
+		}
+		return nil, err
 	}
-
-	user := new(entity.User)
-	if err := c.UserRepository.FindByToken(tx, user, request.Token); err != nil {
-		c.Log.Warn("Failed find user by token", "error", err)
-		return nil, fiber.ErrNotFound
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.Log.Warn("Failed commit transaction", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
 	return &model.Auth{ID: user.ID}, nil
 }
 
-func (c *UserUseCase) Create(ctx context.Context, request *model.RegisterUserRequest) (*model.UserResponse, error) {
-	tx := c.DB.WithContext(ctx).Begin()
-	defer tx.Rollback()
+// Create mendaftarkan user baru. Password disimpan sebagai hash bcrypt.
+func (c *UserUseCase) Create(ctx context.Context, req *model.RegisterUserRequest) (*model.UserResponse, error) {
+	if err := c.validate.Struct(req); err != nil {
+		return nil, err
+	}
 
-	err := c.Validate.Struct(request)
+	password, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		c.Log.Warn("Invalid request body", "error", err)
-		return nil, fiber.ErrBadRequest
+		return nil, apperror.Internal(err)
 	}
+	user := &entity.User{ID: req.ID, Password: string(password), Name: req.Name}
 
-	total, err := c.UserRepository.CountById(tx, request.ID)
-	if err != nil {
-		c.Log.Warn("Failed count user from database", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
-	if total > 0 {
-		c.Log.Warn("User already exists", "error", err)
-		return nil, fiber.ErrConflict
-	}
-
-	password, err := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
-	if err != nil {
-		c.Log.Warn("Failed to generate bcrype hash", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
-	user := &entity.User{
-		ID:       request.ID,
-		Password: string(password),
-		Name:     request.Name,
-	}
-
-	if err := c.UserRepository.Create(tx, user); err != nil {
-		c.Log.Warn("Failed create user to database", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.Log.Warn("Failed commit transaction", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
-	if c.UserProducer != nil {
-		event := converter.UserToEvent(user)
-		c.Log.Info("Publishing user created event")
-		if err = c.UserProducer.Send(event); err != nil {
-			c.Log.Warn("Failed publish user created event", "error", err)
-			return nil, fiber.ErrInternalServerError
+	err = c.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		_, err := c.users.FindByID(ctx, req.ID)
+		switch {
+		case err == nil:
+			return apperror.Conflict("user already exists")
+		case !isNotFound(err):
+			return err
 		}
-	} else {
-		c.Log.Info("Kafka producer is disabled, skipping user created event")
+		if err := c.users.Create(ctx, user); err != nil {
+			return err
+		}
+		return c.events.Publish(ctx, converter.UserToEvent(user))
+	})
+	if err != nil {
+		return nil, err
 	}
-
 	return converter.UserToResponse(user), nil
 }
 
-func (c *UserUseCase) Login(ctx context.Context, request *model.LoginUserRequest) (*model.UserResponse, error) {
-	tx := c.DB.WithContext(ctx).Begin()
-	defer tx.Rollback()
-
-	if err := c.Validate.Struct(request); err != nil {
-		c.Log.Warn("Invalid request body", "error", err)
-		return nil, fiber.ErrBadRequest
+// Login memeriksa kredensial dan menerbitkan token sesi baru. Pesan error
+// sengaja sama untuk user tidak ditemukan dan password salah, supaya
+// penyerang tidak bisa menebak user mana yang terdaftar.
+func (c *UserUseCase) Login(ctx context.Context, req *model.LoginUserRequest) (*model.UserResponse, error) {
+	if err := c.validate.Struct(req); err != nil {
+		return nil, err
 	}
 
-	user := new(entity.User)
-	if err := c.UserRepository.FindById(tx, user, request.ID); err != nil {
-		c.Log.Warn("Failed find user by id", "error", err)
-		return nil, fiber.ErrUnauthorized
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.Password)); err != nil {
-		c.Log.Warn("Failed to compare user password with bcrype hash", "error", err)
-		return nil, fiber.ErrUnauthorized
-	}
-
-	user.Token = uuid.New().String()
-	if err := c.UserRepository.Update(tx, user); err != nil {
-		c.Log.Warn("Failed save user", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.Log.Warn("Failed commit transaction", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
-	if c.UserProducer != nil {
-		event := converter.UserToEvent(user)
-		c.Log.Info("Publishing user login event")
-		if err := c.UserProducer.Send(event); err != nil {
-			c.Log.Warn("Failed publish user login event", "error", err)
-			return nil, fiber.ErrInternalServerError
+	var user *entity.User
+	err := c.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		var err error
+		user, err = c.users.FindByID(ctx, req.ID)
+		if err != nil {
+			if isNotFound(err) {
+				return apperror.Unauthorized("invalid credentials")
+			}
+			return err
 		}
-	} else {
-		c.Log.Info("Kafka producer is disabled, skipping user login event")
+		if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)) != nil {
+			return apperror.Unauthorized("invalid credentials")
+		}
+		user.Token = uuid.NewString()
+		return c.users.Update(ctx, user)
+	})
+	if err != nil {
+		return nil, err
 	}
-
 	return converter.UserToTokenResponse(user), nil
 }
 
-func (c *UserUseCase) Current(ctx context.Context, request *model.GetUserRequest) (*model.UserResponse, error) {
-	tx := c.DB.WithContext(ctx).Begin()
-	defer tx.Rollback()
-
-	if err := c.Validate.Struct(request); err != nil {
-		c.Log.Warn("Invalid request body", "error", err)
-		return nil, fiber.ErrBadRequest
+// Current mengembalikan profil user yang login.
+func (c *UserUseCase) Current(ctx context.Context, req *model.GetUserRequest) (*model.UserResponse, error) {
+	if err := c.validate.Struct(req); err != nil {
+		return nil, err
 	}
-
-	user := new(entity.User)
-	if err := c.UserRepository.FindById(tx, user, request.ID); err != nil {
-		c.Log.Warn("Failed find user by id", "error", err)
-		return nil, fiber.ErrNotFound
+	user, err := c.users.FindByID(ctx, req.ID)
+	if err != nil {
+		return nil, err
 	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.Log.Warn("Failed commit transaction", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
 	return converter.UserToResponse(user), nil
 }
 
-func (c *UserUseCase) Logout(ctx context.Context, request *model.LogoutUserRequest) (bool, error) {
-	tx := c.DB.WithContext(ctx).Begin()
-	defer tx.Rollback()
-
-	if err := c.Validate.Struct(request); err != nil {
-		c.Log.Warn("Invalid request body", "error", err)
-		return false, fiber.ErrBadRequest
+// Logout menghapus token sesi user sehingga token lama tidak berlaku lagi.
+func (c *UserUseCase) Logout(ctx context.Context, req *model.LogoutUserRequest) (bool, error) {
+	if err := c.validate.Struct(req); err != nil {
+		return false, err
 	}
-
-	user := new(entity.User)
-	if err := c.UserRepository.FindById(tx, user, request.ID); err != nil {
-		c.Log.Warn("Failed find user by id", "error", err)
-		return false, fiber.ErrNotFound
-	}
-
-	user.Token = ""
-
-	if err := c.UserRepository.Update(tx, user); err != nil {
-		c.Log.Warn("Failed save user", "error", err)
-		return false, fiber.ErrInternalServerError
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.Log.Warn("Failed commit transaction", "error", err)
-		return false, fiber.ErrInternalServerError
-	}
-
-	if c.UserProducer != nil {
-		event := converter.UserToEvent(user)
-		c.Log.Info("Publishing user logout event")
-		if err := c.UserProducer.Send(event); err != nil {
-			c.Log.Warn("Failed publish user logout event", "error", err)
-			return false, fiber.ErrInternalServerError
-		}
-	} else {
-		c.Log.Info("Kafka producer is disabled, skipping user logout event")
-	}
-
-	return true, nil
-}
-
-func (c *UserUseCase) Update(ctx context.Context, request *model.UpdateUserRequest) (*model.UserResponse, error) {
-	tx := c.DB.WithContext(ctx).Begin()
-	defer tx.Rollback()
-
-	if err := c.Validate.Struct(request); err != nil {
-		c.Log.Warn("Invalid request body", "error", err)
-		return nil, fiber.ErrBadRequest
-	}
-
-	user := new(entity.User)
-	if err := c.UserRepository.FindById(tx, user, request.ID); err != nil {
-		c.Log.Warn("Failed find user by id", "error", err)
-		return nil, fiber.ErrNotFound
-	}
-
-	if request.Name != "" {
-		user.Name = request.Name
-	}
-
-	if request.Password != "" {
-		password, err := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
+	err := c.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		user, err := c.users.FindByID(ctx, req.ID)
 		if err != nil {
-			c.Log.Warn("Failed to generate bcrype hash", "error", err)
-			return nil, fiber.ErrInternalServerError
+			return err
 		}
-		user.Password = string(password)
+		user.Token = ""
+		return c.users.Update(ctx, user)
+	})
+	return err == nil, err
+}
+
+// Update mengubah nama dan/atau password user yang login.
+func (c *UserUseCase) Update(ctx context.Context, req *model.UpdateUserRequest) (*model.UserResponse, error) {
+	if err := c.validate.Struct(req); err != nil {
+		return nil, err
 	}
 
-	if err := c.UserRepository.Update(tx, user); err != nil {
-		c.Log.Warn("Failed save user", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.Log.Warn("Failed commit transaction", "error", err)
-		return nil, fiber.ErrInternalServerError
-	}
-
-	if c.UserProducer != nil {
-		event := converter.UserToEvent(user)
-		c.Log.Info("Publishing user updated event")
-		if err := c.UserProducer.Send(event); err != nil {
-			c.Log.Warn("Failed publish user updated event", "error", err)
-			return nil, fiber.ErrInternalServerError
+	var user *entity.User
+	err := c.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		var err error
+		user, err = c.users.FindByID(ctx, req.ID)
+		if err != nil {
+			return err
 		}
-	} else {
-		c.Log.Info("Kafka producer is disabled, skipping user updated event")
+		if req.Name != "" {
+			user.Name = req.Name
+		}
+		if req.Password != "" {
+			hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+			if err != nil {
+				return apperror.Internal(err)
+			}
+			user.Password = string(hash)
+		}
+		if err := c.users.Update(ctx, user); err != nil {
+			return err
+		}
+		return c.events.Publish(ctx, converter.UserToEvent(user))
+	})
+	if err != nil {
+		return nil, err
 	}
-
 	return converter.UserToResponse(user), nil
+}
+
+// isNotFound melaporkan apakah err adalah apperror NOT_FOUND.
+func isNotFound(err error) bool {
+	appErr, ok := apperror.As(err)
+	return ok && appErr.Code == apperror.CodeNotFound
 }

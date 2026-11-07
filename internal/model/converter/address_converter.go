@@ -21,7 +21,7 @@ func AddressToResponse(address *entity.Address) *model.AddressResponse {
 func AddressToEvent(address *entity.Address) *model.AddressEvent {
 	return &model.AddressEvent{
 		ID:         address.ID,
-		ContactId:  address.ContactId,
+		ContactID:  address.ContactID,
 		Street:     address.Street,
 		City:       address.City,
 		Province:   address.Province,
