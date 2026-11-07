@@ -15,16 +15,16 @@ import (
 )
 
 type contactFixture struct {
-	tx       *fakeTransactor
+	tx        *fakeTransactor
 	contacts  *mocks.ContactRepository
 	addresses *mocks.AddressRepository
 	events    *mocks.EventPublisher
-	uc       *usecase.ContactUseCase
+	uc        *usecase.ContactUseCase
 }
 
 func newContactFixture(t *testing.T) *contactFixture {
 	f := &contactFixture{
-		tx:       &fakeTransactor{},
+		tx:        &fakeTransactor{},
 		contacts:  mocks.NewContactRepository(t),
 		addresses: mocks.NewAddressRepository(t),
 		events:    mocks.NewEventPublisher(t),
