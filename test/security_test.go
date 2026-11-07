@@ -18,6 +18,7 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/config"
 	"github.com/primestrider/golang-clean-architecture/internal/model"
 	"github.com/primestrider/golang-clean-architecture/test/testsupport"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -230,4 +231,26 @@ func TestLoginRateLimit_DistributedFailuresPerEmail(t *testing.T) {
 	}
 
 	assert.Equal(t, http.StatusTooManyRequests, last.StatusCode)
+}
+
+// TestMetricsNotOnPublicPort: metrik hanya tersedia di port admin, bukan di
+// API publik.
+func TestMetricsNotOnPublicPort(t *testing.T) {
+	app := testsupport.NewWebApp(t)
+
+	resp, _ := rawRequest(t, app, http.MethodGet, "/metrics", "", nil)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+// TestHTTPMetricsRecordedForAPIRequests: request ke API tercatat di metrik
+// dengan label template route.
+func TestHTTPMetricsRecordedForAPIRequests(t *testing.T) {
+	app := testsupport.NewWebApp(t)
+	user := app.CreateUser(t, "eko@example.com", "rahasia123")
+
+	resp, _ := app.Do(t, http.MethodGet, "/api/v1/users/_current", nil, app.TokenFor(t, user))
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	assert.InDelta(t, 1, testutil.ToFloat64(app.Metrics.HTTPRequests.WithLabelValues("GET", "/api/v1/users/_current", "200")), 0)
 }

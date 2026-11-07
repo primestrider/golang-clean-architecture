@@ -11,6 +11,8 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/primestrider/golang-clean-architecture/internal/config"
+	"github.com/primestrider/golang-clean-architecture/internal/observability"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -18,9 +20,10 @@ import (
 // TestApp adalah aplikasi web lengkap yang terhubung ke database container.
 // Request dikirim langsung ke Fiber (app.Test) tanpa membuka port jaringan.
 type TestApp struct {
-	App *fiber.App
-	DB  *gorm.DB
-	Cfg *config.Config
+	App     *fiber.App
+	DB      *gorm.DB
+	Cfg     *config.Config
+	Metrics *observability.Metrics
 }
 
 // Option mengubah konfigurasi sebelum aplikasi dibuat, misalnya untuk
@@ -49,9 +52,10 @@ func NewWebApp(t testing.TB, opts ...Option) *TestApp {
 
 	Reset(t, db)
 
+	metrics := observability.NewMetrics(prometheus.NewRegistry())
 	app := config.NewFiber(cfg, log)
-	config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app})
-	return &TestApp{App: app, DB: db, Cfg: cfg}
+	config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics})
+	return &TestApp{App: app, DB: db, Cfg: cfg, Metrics: metrics}
 }
 
 // Reset mengosongkan semua tabel aplikasi (kecuali tabel catatan migrasi).

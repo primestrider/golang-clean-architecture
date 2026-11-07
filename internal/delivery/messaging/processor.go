@@ -32,6 +32,7 @@ type Processor struct {
 	maxRetries     int
 	initialBackoff time.Duration
 	log            *slog.Logger
+	metrics        *observability.Metrics
 }
 
 // NewProcessor membuat Processor. maxRetries adalah jumlah percobaan ulang
@@ -39,6 +40,23 @@ type Processor struct {
 // dari initialBackoff (exponential backoff).
 func NewProcessor(handler EventHandler, dlq sarama.SyncProducer, maxRetries int, initialBackoff time.Duration, log *slog.Logger) *Processor {
 	return &Processor{handler: handler, dlq: dlq, maxRetries: maxRetries, initialBackoff: initialBackoff, log: log}
+}
+
+// WithMetrics mengaktifkan pencatatan metrik consumer.
+func (p *Processor) WithMetrics(m *observability.Metrics) *Processor {
+	p.metrics = m
+	return p
+}
+
+// record mencatat hasil pemrosesan pesan ke metrik (bila aktif).
+func (p *Processor) record(topic, result string) {
+	if p.metrics == nil {
+		return
+	}
+	p.metrics.MessagesProcessed.WithLabelValues(topic, result).Inc()
+	if result == "dlq" {
+		p.metrics.MessagesDLQ.WithLabelValues(topic).Inc()
+	}
 }
 
 // Process memproses satu pesan. Mengembalikan nil bila pesan selesai
@@ -51,6 +69,7 @@ func (p *Processor) Process(ctx context.Context, msg *sarama.ConsumerMessage) er
 	var e model.Event
 	if err := json.Unmarshal(msg.Value, &e); err != nil {
 		p.log.ErrorContext(ctx, "undecodable message, sending to DLQ", "topic", msg.Topic, "error", err)
+		p.record(msg.Topic, "dlq")
 		return p.toDLQ(msg, err, 0)
 	}
 
@@ -60,6 +79,7 @@ func (p *Processor) Process(ctx context.Context, msg *sarama.ConsumerMessage) er
 	for attempts <= p.maxRetries {
 		attempts++
 		if err = p.handler.Handle(ctx, e); err == nil {
+			p.record(msg.Topic, "success")
 			return nil
 		}
 		p.log.WarnContext(ctx, "handle event failed",
@@ -77,6 +97,7 @@ func (p *Processor) Process(ctx context.Context, msg *sarama.ConsumerMessage) er
 
 	p.log.ErrorContext(ctx, "event failed after retries, sending to DLQ",
 		"event_id", e.EventID, "event_type", e.EventType, "attempts", attempts)
+	p.record(msg.Topic, "dlq")
 	return p.toDLQ(msg, err, attempts)
 }
 

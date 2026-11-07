@@ -19,6 +19,10 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/primestrider/golang-clean-architecture/internal/config"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/admin"
+	"github.com/primestrider/golang-clean-architecture/internal/observability"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -46,12 +50,19 @@ func run() error {
 		return err
 	}
 
+	// Registry Prometheus milik aplikasi (bukan registry global), supaya
+	// metrik yang diekspos hanya yang memang didaftarkan aplikasi ini.
+	registry := prometheus.NewRegistry()
+	metrics := observability.NewMetrics(registry)
+	metrics.Register(collectors.NewDBStatsCollector(sqlDB, cfg.Database.Name))
+
 	app := config.NewFiber(cfg, log)
-	config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app})
+	config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics})
 
 	adminServer := admin.NewServer(fmt.Sprintf(":%d", cfg.Admin.Port), log, map[string]admin.Check{
 		"db": sqlDB.PingContext,
 	})
+	adminServer.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 
 	// ctx dibatalkan saat menerima SIGINT (Ctrl+C) atau SIGTERM (dikirim
 	// Docker/Kubernetes ketika container dihentikan).

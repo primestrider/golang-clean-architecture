@@ -8,6 +8,7 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/http"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/http/middleware"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/http/route"
+	"github.com/primestrider/golang-clean-architecture/internal/observability"
 	"github.com/primestrider/golang-clean-architecture/internal/repository"
 	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 	"github.com/primestrider/golang-clean-architecture/internal/validation"
@@ -21,6 +22,8 @@ type WebDeps struct {
 	Log    *slog.Logger
 	DB     *gorm.DB
 	App    *fiber.App
+	// Metrics mencatat metrik HTTP; wajib diisi.
+	Metrics *observability.Metrics
 }
 
 // BootstrapWeb merangkai seluruh aplikasi web: repository, use case,
@@ -63,6 +66,7 @@ func BootstrapWeb(deps *WebDeps) {
 		CORSOrigins:     deps.Config.Server.CORSOrigins,
 		RequestTimeout:  deps.Config.Server.RequestTimeout,
 		GlobalPerMinute: deps.Config.RateLimit.GlobalPerMinute,
+		Extra:           []fiber.Handler{deps.Metrics.HTTPMiddleware()},
 	}, deps.Log)
 
 	authLimit := deps.Config.RateLimit.AuthPerMinute

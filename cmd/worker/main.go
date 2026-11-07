@@ -18,6 +18,10 @@ import (
 
 	"github.com/primestrider/golang-clean-architecture/internal/config"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/admin"
+	"github.com/primestrider/golang-clean-architecture/internal/observability"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -44,7 +48,11 @@ func run() error {
 		return err
 	}
 
-	worker, err := config.BootstrapWorker(&config.WorkerDeps{Config: cfg, Log: log, DB: db})
+	registry := prometheus.NewRegistry()
+	metrics := observability.NewMetrics(registry)
+	metrics.Register(collectors.NewDBStatsCollector(sqlDB, cfg.Database.Name))
+
+	worker, err := config.BootstrapWorker(&config.WorkerDeps{Config: cfg, Log: log, DB: db, Metrics: metrics})
 	if err != nil {
 		return err
 	}
@@ -55,6 +63,7 @@ func run() error {
 	adminServer := admin.NewServer(fmt.Sprintf(":%d", cfg.Admin.WorkerPort), log, map[string]admin.Check{
 		"db": sqlDB.PingContext,
 	})
+	adminServer.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 	adminErr := make(chan error, 1)
 	go func() { adminErr <- adminServer.Start() }()
 
