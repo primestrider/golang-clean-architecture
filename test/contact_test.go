@@ -1,412 +1,114 @@
+//go:build integration
+
 package test
 
 import (
-	"encoding/json"
-	"github.com/primestrider/golang-clean-architecture/internal/entity"
-	"github.com/primestrider/golang-clean-architecture/internal/model"
-	"io"
+	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
-	"github.com/google/uuid"
+	"github.com/primestrider/golang-clean-architecture/internal/model"
+	"github.com/primestrider/golang-clean-architecture/test/testsupport"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestCreateContact(t *testing.T) {
-	TestLogin(t)
+// loggedIn menyiapkan aplikasi dengan satu user yang sudah login.
+func loggedIn(t *testing.T) (*testsupport.TestApp, string, string) {
+	app := testsupport.NewWebApp(t)
+	app.CreateUser(t, "eko", "rahasia123")
+	return app, "eko", app.Login(t, "eko", "rahasia123")
+}
 
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
+func TestCreateContact_Success(t *testing.T) {
+	app, _, token := loggedIn(t)
 
-	requestBody := model.CreateContactRequest{
-		FirstName: "Eko Kurniawan",
-		LastName:  "Khannedy",
-		Email:     "eko@example.com",
-		Phone:     "088888888888",
+	resp, raw := app.Do(t, http.MethodPost, "/api/v1/contacts",
+		model.CreateContactRequest{FirstName: "Budi", LastName: "Santoso", Email: "budi@example.com", Phone: "0811"}, token)
+
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
+	contact := testsupport.DecodeData[model.ContactResponse](t, raw)
+	assert.Equal(t, "Budi", contact.FirstName)
+	assert.NotEmpty(t, contact.ID)
+	assert.NotZero(t, contact.CreatedAt)
+}
+
+func TestCreateContact_InvalidEmail(t *testing.T) {
+	app, _, token := loggedIn(t)
+
+	resp, raw := app.Do(t, http.MethodPost, "/api/v1/contacts",
+		model.CreateContactRequest{FirstName: "Budi", Email: "bukan-email"}, token)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "email", testsupport.DecodeProblem(t, raw).Errors[0].Field)
+}
+
+func TestGetContact_Success(t *testing.T) {
+	app, userID, token := loggedIn(t)
+	contact := app.CreateContact(t, userID, "Budi")
+
+	resp, raw := app.Do(t, http.MethodGet, "/api/v1/contacts/"+contact.ID, nil, token)
+
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
+	assert.Equal(t, contact.ID, testsupport.DecodeData[model.ContactResponse](t, raw).ID)
+}
+
+func TestGetContact_OtherUsersContactIsNotFound(t *testing.T) {
+	app, _, token := loggedIn(t)
+	other := app.CreateUser(t, "other", "rahasia123")
+	contact := app.CreateContact(t, other.ID, "Rahasia")
+
+	resp, _ := app.Do(t, http.MethodGet, "/api/v1/contacts/"+contact.ID, nil, token)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestUpdateContact_Success(t *testing.T) {
+	app, userID, token := loggedIn(t)
+	contact := app.CreateContact(t, userID, "Budi")
+
+	resp, raw := app.Do(t, http.MethodPut, "/api/v1/contacts/"+contact.ID,
+		model.UpdateContactRequest{FirstName: "Budi Baru"}, token)
+
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
+	assert.Equal(t, "Budi Baru", testsupport.DecodeData[model.ContactResponse](t, raw).FirstName)
+}
+
+func TestDeleteContact_Success(t *testing.T) {
+	app, userID, token := loggedIn(t)
+	contact := app.CreateContact(t, userID, "Budi")
+
+	resp, _ := app.Do(t, http.MethodDelete, "/api/v1/contacts/"+contact.ID, nil, token)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, _ = app.Do(t, http.MethodGet, "/api/v1/contacts/"+contact.ID, nil, token)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestSearchContact_Paging(t *testing.T) {
+	app, userID, token := loggedIn(t)
+	for i := range 15 {
+		app.CreateContact(t, userID, fmt.Sprintf("Kontak%02d", i))
 	}
-	bodyJson, err := json.Marshal(requestBody)
-	assert.Nil(t, err)
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/contacts", strings.NewReader(string(bodyJson)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
+	resp, raw := app.Do(t, http.MethodGet, "/api/v1/contacts?page=2&size=10", nil, token)
 
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.ContactResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusOK, response.StatusCode)
-	assert.Equal(t, requestBody.FirstName, responseBody.Data.FirstName)
-	assert.Equal(t, requestBody.LastName, responseBody.Data.LastName)
-	assert.Equal(t, requestBody.Email, responseBody.Data.Email)
-	assert.Equal(t, requestBody.Phone, responseBody.Data.Phone)
-	assert.NotNil(t, responseBody.Data.ID)
-	assert.NotNil(t, responseBody.Data.CreatedAt)
-	assert.NotNil(t, responseBody.Data.UpdatedAt)
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
+	var body model.WebResponse[[]model.ContactResponse]
+	require.NoError(t, jsonUnmarshal(raw, &body))
+	assert.Len(t, body.Data, 5)
+	assert.Equal(t, &model.PageMetadata{Page: 2, Size: 10, TotalItem: 15, TotalPage: 2}, body.Paging)
 }
 
-func TestCreateContactFailed(t *testing.T) {
-	TestLogin(t)
-
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	requestBody := model.CreateContactRequest{
-		FirstName: "",
-		LastName:  "",
-		Email:     "",
-		Phone:     "",
-	}
-	bodyJson, err := json.Marshal(requestBody)
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/contacts", strings.NewReader(string(bodyJson)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.ContactResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusBadRequest, response.StatusCode)
-}
-
-func TestGetConnect(t *testing.T) {
-	TestCreateContact(t)
-
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	contact := new(entity.Contact)
-	err = db.Where("user_id = ?", user.ID).First(contact).Error
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/contacts/"+contact.ID, nil)
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.ContactResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusOK, response.StatusCode)
-	assert.Equal(t, contact.ID, responseBody.Data.ID)
-	assert.Equal(t, contact.FirstName, responseBody.Data.FirstName)
-	assert.Equal(t, contact.LastName, responseBody.Data.LastName)
-	assert.Equal(t, contact.Email, responseBody.Data.Email)
-	assert.Equal(t, contact.Phone, responseBody.Data.Phone)
-	assert.Equal(t, contact.CreatedAt, responseBody.Data.CreatedAt)
-	assert.Equal(t, contact.UpdatedAt, responseBody.Data.UpdatedAt)
-}
-
-func TestGetContactFailed(t *testing.T) {
-	TestCreateContact(t)
-
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/contacts/"+uuid.NewString(), nil)
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.ContactResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusNotFound, response.StatusCode)
-}
-
-func TestUpdateContact(t *testing.T) {
-	TestCreateContact(t)
-
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	contact := new(entity.Contact)
-	err = db.Where("user_id = ?", user.ID).First(contact).Error
-	assert.Nil(t, err)
-
-	requestBody := model.UpdateContactRequest{
-		FirstName: "Eko",
-		LastName:  "Budiman",
-		Email:     "budiman@example.com",
-		Phone:     "089898989",
-	}
-	bodyJson, err := json.Marshal(requestBody)
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodPut, "/api/v1/contacts/"+contact.ID, strings.NewReader(string(bodyJson)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.ContactResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusOK, response.StatusCode)
-	assert.Equal(t, requestBody.FirstName, responseBody.Data.FirstName)
-	assert.Equal(t, requestBody.LastName, responseBody.Data.LastName)
-	assert.Equal(t, requestBody.Email, responseBody.Data.Email)
-	assert.Equal(t, requestBody.Phone, responseBody.Data.Phone)
-	assert.NotNil(t, responseBody.Data.ID)
-	assert.NotNil(t, responseBody.Data.CreatedAt)
-	assert.NotNil(t, responseBody.Data.UpdatedAt)
-}
-
-func TestUpdateContactFailed(t *testing.T) {
-	TestCreateContact(t)
-
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	contact := new(entity.Contact)
-	err = db.Where("user_id = ?", user.ID).First(contact).Error
-	assert.Nil(t, err)
-
-	requestBody := model.UpdateContactRequest{
-		FirstName: "",
-		LastName:  "",
-		Email:     "",
-		Phone:     "",
-	}
-	bodyJson, err := json.Marshal(requestBody)
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodPut, "/api/v1/contacts/"+contact.ID, strings.NewReader(string(bodyJson)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.ContactResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusBadRequest, response.StatusCode)
-}
-
-func TestUpdateContactNotFound(t *testing.T) {
-	TestCreateContact(t)
-
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	requestBody := model.UpdateContactRequest{
-		FirstName: "",
-		LastName:  "",
-		Email:     "",
-		Phone:     "",
-	}
-	bodyJson, err := json.Marshal(requestBody)
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodPut, "/api/v1/contacts/"+uuid.NewString(), strings.NewReader(string(bodyJson)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.ContactResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusNotFound, response.StatusCode)
-}
-
-func TestDeleteContact(t *testing.T) {
-	TestCreateContact(t)
-
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	contact := new(entity.Contact)
-	err = db.Where("user_id = ?", user.ID).First(contact).Error
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodDelete, "/api/v1/contacts/"+contact.ID, nil)
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[bool])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusOK, response.StatusCode)
-	assert.Equal(t, true, responseBody.Data)
-}
-
-func TestDeleteContactFailed(t *testing.T) {
-	TestCreateContact(t)
-
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodDelete, "/api/v1/contacts/"+uuid.NewString(), nil)
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[bool])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusNotFound, response.StatusCode)
-}
-
-func TestSearchContact(t *testing.T) {
-	TestLogin(t)
-
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	CreateContacts(user, 20)
-
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/contacts", nil)
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[[]model.ContactResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusOK, response.StatusCode)
-	assert.Equal(t, 10, len(responseBody.Data))
-	assert.Equal(t, int64(20), responseBody.Paging.TotalItem)
-	assert.Equal(t, int64(2), responseBody.Paging.TotalPage)
-	assert.Equal(t, 1, responseBody.Paging.Page)
-	assert.Equal(t, 10, responseBody.Paging.Size)
-}
-
-func TestSearchContactWithPagination(t *testing.T) {
-	TestLogin(t)
-
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	CreateContacts(user, 20)
-
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/contacts?page=2&size=5", nil)
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[[]model.ContactResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusOK, response.StatusCode)
-	assert.Equal(t, 5, len(responseBody.Data))
-	assert.Equal(t, int64(20), responseBody.Paging.TotalItem)
-	assert.Equal(t, int64(4), responseBody.Paging.TotalPage)
-	assert.Equal(t, 2, responseBody.Paging.Page)
-	assert.Equal(t, 5, responseBody.Paging.Size)
-}
-
-func TestSearchContactWithFilter(t *testing.T) {
-	TestLogin(t)
-
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	CreateContacts(user, 20)
-
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/contacts?name=contact&phone=08000000&email=example.com", nil)
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[[]model.ContactResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusOK, response.StatusCode)
-	assert.Equal(t, 10, len(responseBody.Data))
-	assert.Equal(t, int64(20), responseBody.Paging.TotalItem)
-	assert.Equal(t, int64(2), responseBody.Paging.TotalPage)
-	assert.Equal(t, 1, responseBody.Paging.Page)
-	assert.Equal(t, 10, responseBody.Paging.Size)
+func TestSearchContact_FilterByName(t *testing.T) {
+	app, userID, token := loggedIn(t)
+	app.CreateContact(t, userID, "Budi")
+	app.CreateContact(t, userID, "Andi")
+
+	resp, raw := app.Do(t, http.MethodGet, "/api/v1/contacts?name=bud", nil, token)
+
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
+	contacts := testsupport.DecodeData[[]model.ContactResponse](t, raw)
+	require.Len(t, contacts, 1)
+	assert.Equal(t, "Budi", contacts[0].FirstName)
 }

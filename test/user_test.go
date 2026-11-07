@@ -1,407 +1,98 @@
+//go:build integration
+
 package test
 
 import (
-	"encoding/json"
-	"github.com/primestrider/golang-clean-architecture/internal/entity"
-	"github.com/primestrider/golang-clean-architecture/internal/model"
-	"io"
 	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
+	"github.com/primestrider/golang-clean-architecture/internal/model"
+	"github.com/primestrider/golang-clean-architecture/test/testsupport"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/stretchr/testify/require"
 )
 
-func TestRegister(t *testing.T) {
-	ClearAll()
-	requestBody := model.RegisterUserRequest{
-		ID:       "khannedy",
-		Password: "rahasia",
-		Name:     "Eko Khannedy",
-	}
+func TestRegister_Success(t *testing.T) {
+	app := testsupport.NewWebApp(t)
 
-	bodyJson, err := json.Marshal(requestBody)
-	assert.Nil(t, err)
+	resp, raw := app.Do(t, http.MethodPost, "/api/v1/users",
+		model.RegisterUserRequest{ID: "eko", Password: "rahasia123", Name: "Eko"}, "")
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/users", strings.NewReader(string(bodyJson)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.UserResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusOK, response.StatusCode)
-	assert.Equal(t, requestBody.ID, responseBody.Data.ID)
-	assert.Equal(t, requestBody.Name, responseBody.Data.Name)
-	assert.NotNil(t, responseBody.Data.CreatedAt)
-	assert.NotNil(t, responseBody.Data.UpdatedAt)
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
+	user := testsupport.DecodeData[model.UserResponse](t, raw)
+	assert.Equal(t, "eko", user.ID)
+	assert.Equal(t, "Eko", user.Name)
+	assert.NotContains(t, string(raw), "password")
 }
 
-func TestRegisterError(t *testing.T) {
-	ClearAll()
-	requestBody := model.RegisterUserRequest{
-		ID:       "",
-		Password: "",
-		Name:     "",
-	}
+func TestRegister_DuplicateIsConflict(t *testing.T) {
+	app := testsupport.NewWebApp(t)
+	app.CreateUser(t, "eko", "rahasia123")
 
-	bodyJson, err := json.Marshal(requestBody)
-	assert.Nil(t, err)
+	resp, raw := app.Do(t, http.MethodPost, "/api/v1/users",
+		model.RegisterUserRequest{ID: "eko", Password: "rahasia123", Name: "Eko"}, "")
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/users", strings.NewReader(string(bodyJson)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.UserResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusBadRequest, response.StatusCode)
+	assert.Equal(t, http.StatusConflict, resp.StatusCode, string(raw))
 }
 
-func TestRegisterDuplicate(t *testing.T) {
-	ClearAll()
-	TestRegister(t) // register success
+func TestRegister_InvalidIsProblemWithFields(t *testing.T) {
+	app := testsupport.NewWebApp(t)
 
-	requestBody := model.RegisterUserRequest{
-		ID:       "khannedy",
-		Password: "rahasia",
-		Name:     "Eko Khannedy",
-	}
+	resp, raw := app.Do(t, http.MethodPost, "/api/v1/users", model.RegisterUserRequest{}, "")
 
-	bodyJson, err := json.Marshal(requestBody)
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/users", strings.NewReader(string(bodyJson)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.UserResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusConflict, response.StatusCode)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "application/problem+json", resp.Header.Get("Content-Type"))
+	problem := testsupport.DecodeProblem(t, raw)
+	assert.NotEmpty(t, problem.Errors)
 }
 
-func TestLogin(t *testing.T) {
-	TestRegister(t) // register success
+func TestLogin_WrongPasswordIsUnauthorized(t *testing.T) {
+	app := testsupport.NewWebApp(t)
+	app.CreateUser(t, "eko", "rahasia123")
 
-	requestBody := model.LoginUserRequest{
-		ID:       "khannedy",
-		Password: "rahasia",
-	}
+	resp, _ := app.Do(t, http.MethodPost, "/api/v1/users/_login", model.LoginUserRequest{ID: "eko", Password: "salah"}, "")
 
-	bodyJson, err := json.Marshal(requestBody)
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/users/_login", strings.NewReader(string(bodyJson)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.UserResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusOK, response.StatusCode)
-	assert.NotNil(t, responseBody.Data.Token)
-
-	user := new(entity.User)
-	err = db.Where("id = ?", requestBody.ID).First(user).Error
-	assert.Nil(t, err)
-	assert.Equal(t, user.Token, responseBody.Data.Token)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }
 
-func TestLoginWrongUsername(t *testing.T) {
-	ClearAll()
-	TestRegister(t) // register success
+func TestCurrentUser_RequiresToken(t *testing.T) {
+	app := testsupport.NewWebApp(t)
 
-	requestBody := model.LoginUserRequest{
-		ID:       "wrong",
-		Password: "rahasia",
-	}
+	resp, _ := app.Do(t, http.MethodGet, "/api/v1/users/_current", nil, "wrong-token")
 
-	bodyJson, err := json.Marshal(requestBody)
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/users/_login", strings.NewReader(string(bodyJson)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.UserResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusUnauthorized, response.StatusCode)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }
 
-func TestLoginWrongPassword(t *testing.T) {
-	ClearAll()
-	TestRegister(t) // register success
+func TestCurrentUser_Success(t *testing.T) {
+	app := testsupport.NewWebApp(t)
+	app.CreateUser(t, "eko", "rahasia123")
+	token := app.Login(t, "eko", "rahasia123")
 
-	requestBody := model.LoginUserRequest{
-		ID:       "khannedy",
-		Password: "wrong",
-	}
+	resp, raw := app.Do(t, http.MethodGet, "/api/v1/users/_current", nil, token)
 
-	bodyJson, err := json.Marshal(requestBody)
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/users/_login", strings.NewReader(string(bodyJson)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.UserResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusUnauthorized, response.StatusCode)
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
+	assert.Equal(t, "eko", testsupport.DecodeData[model.UserResponse](t, raw).ID)
 }
 
-func TestLogout(t *testing.T) {
-	ClearAll()
-	TestLogin(t) // login success
+func TestUpdateUser_ChangesName(t *testing.T) {
+	app := testsupport.NewWebApp(t)
+	app.CreateUser(t, "eko", "rahasia123")
+	token := app.Login(t, "eko", "rahasia123")
 
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
+	resp, raw := app.Do(t, http.MethodPatch, "/api/v1/users/_current", model.UpdateUserRequest{Name: "Eko Baru"}, token)
 
-	request := httptest.NewRequest(http.MethodDelete, "/api/v1/users", nil)
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[bool])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusOK, response.StatusCode)
-	assert.True(t, responseBody.Data)
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
+	assert.Equal(t, "Eko Baru", testsupport.DecodeData[model.UserResponse](t, raw).Name)
 }
 
-func TestLogoutWrongAuthorization(t *testing.T) {
-	ClearAll()
-	TestLogin(t) // login success
+func TestLogout_InvalidatesToken(t *testing.T) {
+	app := testsupport.NewWebApp(t)
+	app.CreateUser(t, "eko", "rahasia123")
+	token := app.Login(t, "eko", "rahasia123")
 
-	request := httptest.NewRequest(http.MethodDelete, "/api/v1/users", nil)
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", "wrong")
+	resp, _ := app.Do(t, http.MethodDelete, "/api/v1/users", nil, token)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[bool])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusUnauthorized, response.StatusCode)
-}
-
-func TestGetCurrentUser(t *testing.T) {
-	ClearAll()
-	TestLogin(t) // login success
-
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/users/_current", nil)
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.UserResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusOK, response.StatusCode)
-	assert.Equal(t, user.ID, responseBody.Data.ID)
-	assert.Equal(t, user.Name, responseBody.Data.Name)
-	assert.Equal(t, user.CreatedAt, responseBody.Data.CreatedAt)
-	assert.Equal(t, user.UpdatedAt, responseBody.Data.UpdatedAt)
-}
-
-func TestGetCurrentUserFailed(t *testing.T) {
-	ClearAll()
-	TestLogin(t) // login success
-
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/users/_current", nil)
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", "wrong")
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.UserResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusUnauthorized, response.StatusCode)
-}
-
-func TestUpdateUserName(t *testing.T) {
-	ClearAll()
-	TestLogin(t) // login success
-
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	requestBody := model.UpdateUserRequest{
-		Name: "Eko Kurniawan Khannedy",
-	}
-
-	bodyJson, err := json.Marshal(requestBody)
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/_current", strings.NewReader(string(bodyJson)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.UserResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusOK, response.StatusCode)
-	assert.Equal(t, user.ID, responseBody.Data.ID)
-	assert.Equal(t, requestBody.Name, responseBody.Data.Name)
-	assert.NotNil(t, responseBody.Data.CreatedAt)
-	assert.NotNil(t, responseBody.Data.UpdatedAt)
-}
-
-func TestUpdateUserPassword(t *testing.T) {
-	ClearAll()
-	TestLogin(t) // login success
-
-	user := new(entity.User)
-	err := db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	requestBody := model.UpdateUserRequest{
-		Password: "rahasialagi",
-	}
-
-	bodyJson, err := json.Marshal(requestBody)
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/_current", strings.NewReader(string(bodyJson)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", user.Token)
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.UserResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusOK, response.StatusCode)
-	assert.Equal(t, user.ID, responseBody.Data.ID)
-	assert.NotNil(t, responseBody.Data.CreatedAt)
-	assert.NotNil(t, responseBody.Data.UpdatedAt)
-
-	user = new(entity.User)
-	err = db.Where("id = ?", "khannedy").First(user).Error
-	assert.Nil(t, err)
-
-	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(requestBody.Password))
-	assert.Nil(t, err)
-}
-
-func TestUpdateFailed(t *testing.T) {
-	ClearAll()
-	TestLogin(t) // login success
-
-	requestBody := model.UpdateUserRequest{
-		Password: "rahasialagi",
-	}
-
-	bodyJson, err := json.Marshal(requestBody)
-	assert.Nil(t, err)
-
-	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/_current", strings.NewReader(string(bodyJson)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", "wrong")
-
-	response, err := app.Test(request)
-	assert.Nil(t, err)
-
-	bytes, err := io.ReadAll(response.Body)
-	assert.Nil(t, err)
-
-	responseBody := new(model.WebResponse[model.UserResponse])
-	err = json.Unmarshal(bytes, responseBody)
-	assert.Nil(t, err)
-
-	assert.Equal(t, http.StatusUnauthorized, response.StatusCode)
+	resp, _ = app.Do(t, http.MethodGet, "/api/v1/users/_current", nil, token)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }
