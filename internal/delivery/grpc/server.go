@@ -8,6 +8,7 @@ package grpc
 
 import (
 	"log/slog"
+	"time"
 
 	grpcprom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
@@ -19,6 +20,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -31,11 +33,21 @@ type ServerOptions struct {
 	// Reflection mengaktifkan gRPC reflection (dipakai tool seperti grpcurl).
 	// Sebaiknya hanya aktif di development.
 	Reflection bool
+	// RequestTimeout adalah batas waktu setiap RPC.
+	RequestTimeout time.Duration
+	// MaxMessageBytes adalah ukuran maksimum pesan yang diterima.
+	MaxMessageBytes int
+	// RatePerMinute adalah batas RPC per menit per IP client (0 = tanpa batas).
+	RatePerMinute int
 }
 
-// NewServer membuat server gRPC dengan rantai interceptor:
-// recovery → request id → logging → metrics → auth, plus tracing lewat
-// stats handler OpenTelemetry. Health service standar (grpc.health.v1)
+// NewServer membuat server gRPC dengan kontrol yang setara dengan API HTTP.
+//
+// Rantai interceptor: recovery → request id → logging → metrics → rate
+// limit → timeout → auth, plus tracing lewat stats handler OpenTelemetry.
+// Di level koneksi: batas ukuran pesan, batas stream bersamaan, timeout
+// handshake, dan kebijakan keepalive supaya client tidak bisa menahan
+// sumber daya server tanpa batas. Health service standar (grpc.health.v1)
 // didaftarkan dan bisa diakses tanpa token.
 func NewServer(opts ServerOptions) *grpc.Server {
 	serverMetrics := grpcprom.NewServerMetrics()
@@ -43,11 +55,18 @@ func NewServer(opts ServerOptions) *grpc.Server {
 
 	server := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.MaxRecvMsgSize(opts.MaxMessageBytes),
+		grpc.MaxConcurrentStreams(100),
+		grpc.ConnectionTimeout(10*time.Second),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 30 * time.Second}),
+		grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionIdle: 5 * time.Minute}),
 		grpc.ChainUnaryInterceptor(
 			recovery.UnaryServerInterceptor(recovery.WithRecoveryHandlerContext(recoverPanic(opts.Log))),
 			requestIDInterceptor(),
 			logging.UnaryServerInterceptor(slogAdapter(opts.Log), logging.WithLogOnEvents(logging.FinishCall)),
 			serverMetrics.UnaryServerInterceptor(),
+			rateLimitInterceptor(opts.RatePerMinute),
+			timeoutInterceptor(opts.RequestTimeout),
 			authInterceptor(opts.Tokens),
 		),
 	)

@@ -111,3 +111,16 @@ func TestGRPC_HealthNoAuth(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, healthpb.HealthCheckResponse_SERVING, res.GetStatus())
 }
+
+// TestGRPC_RateLimited: server gRPC punya rate limit per IP seperti API HTTP.
+func TestGRPC_RateLimited(t *testing.T) {
+	app := testsupport.NewWebApp(t, func(cfg *config.Config) { cfg.RateLimit.GlobalPerMinute = 2 })
+	client := contactv1.NewContactServiceClient(grpcClient(t, app))
+
+	var last error
+	for range 3 {
+		_, last = client.ListContacts(context.Background(), &contactv1.ListContactsRequest{})
+	}
+
+	assert.Equal(t, codes.ResourceExhausted, status.Code(last))
+}

@@ -16,5 +16,9 @@ func NewGRPCServer(cfg *Config, log *slog.Logger, comps *WebComponents) *grpc.Se
 		Contacts:   comps.Contacts,
 		Metrics:    comps.Metrics,
 		Reflection: !cfg.IsProduction(),
+		// Batas yang sama dengan API HTTP.
+		RequestTimeout:  cfg.Server.RequestTimeout,
+		MaxMessageBytes: cfg.Server.BodyLimit,
+		RatePerMinute:   cfg.RateLimit.GlobalPerMinute,
 	})
 }
