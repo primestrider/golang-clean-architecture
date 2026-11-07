@@ -1,11 +1,11 @@
 package http
 
 import (
-	"golang-clean-architecture/internal/delivery/http/middleware"
-	"golang-clean-architecture/internal/model"
-	"golang-clean-architecture/internal/usecase"
+	"github.com/primestrider/golang-clean-architecture/internal/delivery/http/middleware"
+	"github.com/primestrider/golang-clean-architecture/internal/model"
+	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
 )
 
@@ -21,11 +21,11 @@ func NewAddressController(useCase *usecase.AddressUseCase, log *logrus.Logger) *
 	}
 }
 
-func (c *AddressController) Create(ctx *fiber.Ctx) error {
+func (c *AddressController) Create(ctx fiber.Ctx) error {
 	auth := middleware.GetUser(ctx)
 
 	request := new(model.CreateAddressRequest)
-	if err := ctx.BodyParser(request); err != nil {
+	if err := ctx.Bind().Body(request); err != nil {
 		c.Log.WithError(err).Error("failed to parse request body")
 		return fiber.ErrBadRequest
 	}
@@ -33,7 +33,7 @@ func (c *AddressController) Create(ctx *fiber.Ctx) error {
 	request.UserId = auth.ID
 	request.ContactId = ctx.Params("contactId")
 
-	response, err := c.UseCase.Create(ctx.UserContext(), request)
+	response, err := c.UseCase.Create(ctx.Context(), request)
 	if err != nil {
 		c.Log.WithError(err).Error("failed to create address")
 		return err
@@ -42,7 +42,7 @@ func (c *AddressController) Create(ctx *fiber.Ctx) error {
 	return ctx.JSON(model.WebResponse[*model.AddressResponse]{Data: response})
 }
 
-func (c *AddressController) List(ctx *fiber.Ctx) error {
+func (c *AddressController) List(ctx fiber.Ctx) error {
 	auth := middleware.GetUser(ctx)
 	contactId := ctx.Params("contactId")
 
@@ -51,7 +51,7 @@ func (c *AddressController) List(ctx *fiber.Ctx) error {
 		ContactId: contactId,
 	}
 
-	responses, err := c.UseCase.List(ctx.UserContext(), request)
+	responses, err := c.UseCase.List(ctx.Context(), request)
 	if err != nil {
 		c.Log.WithError(err).Error("failed to list addresses")
 		return err
@@ -60,7 +60,7 @@ func (c *AddressController) List(ctx *fiber.Ctx) error {
 	return ctx.JSON(model.WebResponse[[]model.AddressResponse]{Data: responses})
 }
 
-func (c *AddressController) Get(ctx *fiber.Ctx) error {
+func (c *AddressController) Get(ctx fiber.Ctx) error {
 	auth := middleware.GetUser(ctx)
 	contactId := ctx.Params("contactId")
 	addressId := ctx.Params("addressId")
@@ -71,7 +71,7 @@ func (c *AddressController) Get(ctx *fiber.Ctx) error {
 		ID:        addressId,
 	}
 
-	response, err := c.UseCase.Get(ctx.UserContext(), request)
+	response, err := c.UseCase.Get(ctx.Context(), request)
 	if err != nil {
 		c.Log.WithError(err).Error("failed to get address")
 		return err
@@ -80,11 +80,11 @@ func (c *AddressController) Get(ctx *fiber.Ctx) error {
 	return ctx.JSON(model.WebResponse[*model.AddressResponse]{Data: response})
 }
 
-func (c *AddressController) Update(ctx *fiber.Ctx) error {
+func (c *AddressController) Update(ctx fiber.Ctx) error {
 	auth := middleware.GetUser(ctx)
 
 	request := new(model.UpdateAddressRequest)
-	if err := ctx.BodyParser(request); err != nil {
+	if err := ctx.Bind().Body(request); err != nil {
 		c.Log.WithError(err).Error("failed to parse request body")
 		return fiber.ErrBadRequest
 	}
@@ -93,7 +93,7 @@ func (c *AddressController) Update(ctx *fiber.Ctx) error {
 	request.ContactId = ctx.Params("contactId")
 	request.ID = ctx.Params("addressId")
 
-	response, err := c.UseCase.Update(ctx.UserContext(), request)
+	response, err := c.UseCase.Update(ctx.Context(), request)
 	if err != nil {
 		c.Log.WithError(err).Error("failed to update address")
 		return err
@@ -102,7 +102,7 @@ func (c *AddressController) Update(ctx *fiber.Ctx) error {
 	return ctx.JSON(model.WebResponse[*model.AddressResponse]{Data: response})
 }
 
-func (c *AddressController) Delete(ctx *fiber.Ctx) error {
+func (c *AddressController) Delete(ctx fiber.Ctx) error {
 	auth := middleware.GetUser(ctx)
 	contactId := ctx.Params("contactId")
 	addressId := ctx.Params("addressId")
@@ -113,7 +113,7 @@ func (c *AddressController) Delete(ctx *fiber.Ctx) error {
 		ID:        addressId,
 	}
 
-	if err := c.UseCase.Delete(ctx.UserContext(), request); err != nil {
+	if err := c.UseCase.Delete(ctx.Context(), request); err != nil {
 		c.Log.WithError(err).Error("failed to delete address")
 		return err
 	}

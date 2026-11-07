@@ -1,7 +1,7 @@
 package test
 
 import (
-	"golang-clean-architecture/internal/entity"
+	"github.com/primestrider/golang-clean-architecture/internal/entity"
 	"strconv"
 	"testing"
 

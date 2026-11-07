@@ -2,7 +2,7 @@ package messaging
 
 import (
 	"encoding/json"
-	"golang-clean-architecture/internal/model"
+	"github.com/primestrider/golang-clean-architecture/internal/model"
 
 	"github.com/IBM/sarama"
 	"github.com/sirupsen/logrus"

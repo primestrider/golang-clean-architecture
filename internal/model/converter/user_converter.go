@@ -1,8 +1,8 @@
 package converter
 
 import (
-	"golang-clean-architecture/internal/entity"
-	"golang-clean-architecture/internal/model"
+	"github.com/primestrider/golang-clean-architecture/internal/entity"
+	"github.com/primestrider/golang-clean-architecture/internal/model"
 )
 
 func UserToResponse(user *entity.User) *model.UserResponse {

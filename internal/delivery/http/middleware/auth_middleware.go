@@ -1,18 +1,18 @@
 package middleware
 
 import (
-	"golang-clean-architecture/internal/model"
-	"golang-clean-architecture/internal/usecase"
+	"github.com/primestrider/golang-clean-architecture/internal/model"
+	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 func NewAuth(userUserCase *usecase.UserUseCase) fiber.Handler {
-	return func(ctx *fiber.Ctx) error {
+	return func(ctx fiber.Ctx) error {
 		request := &model.VerifyUserRequest{Token: ctx.Get("Authorization", "NOT_FOUND")}
 		userUserCase.Log.Debugf("Authorization : %s", request.Token)
 
-		auth, err := userUserCase.Verify(ctx.UserContext(), request)
+		auth, err := userUserCase.Verify(ctx.Context(), request)
 		if err != nil {
 			userUserCase.Log.Warnf("Failed find user by token : %+v", err)
 			return fiber.ErrUnauthorized
@@ -24,6 +24,6 @@ func NewAuth(userUserCase *usecase.UserUseCase) fiber.Handler {
 	}
 }
 
-func GetUser(ctx *fiber.Ctx) *model.Auth {
+func GetUser(ctx fiber.Ctx) *model.Auth {
 	return ctx.Locals("auth").(*model.Auth)
 }

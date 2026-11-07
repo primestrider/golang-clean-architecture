@@ -1,10 +1,10 @@
 package test
 
 import (
-	"golang-clean-architecture/internal/config"
+	"github.com/primestrider/golang-clean-architecture/internal/config"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"gorm.io/gorm"

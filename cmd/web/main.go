@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"golang-clean-architecture/internal/config"
+	"github.com/primestrider/golang-clean-architecture/internal/config"
 )
 
 func main() {

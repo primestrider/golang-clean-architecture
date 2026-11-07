@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"golang-clean-architecture/internal/config"
-	"golang-clean-architecture/internal/delivery/messaging"
+	"github.com/primestrider/golang-clean-architecture/internal/config"
+	"github.com/primestrider/golang-clean-architecture/internal/delivery/messaging"
 	"os"
 	"os/signal"
 	"syscall"
