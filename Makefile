@@ -2,7 +2,7 @@
 # Di Windows, jalankan lewat Git Bash atau WSL. Perintah aslinya juga
 # tercantum di README untuk pengguna PowerShell.
 
-.PHONY: help tools build test test-integration lint vuln mocks create-admin
+.PHONY: help tools build run-web run-worker test test-integration lint vuln mocks create-admin migrate-up migrate-down migrate-create compose-up compose-full compose-down
 
 help: ## Tampilkan daftar target
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -14,6 +14,12 @@ tools: ## Pasang tool pengembangan (golangci-lint, mockery, govulncheck)
 
 build: ## Build semua binary ke folder bin/
 	go build -o bin/ ./cmd/...
+
+run-web: ## Jalankan API secara lokal (butuh MySQL, lihat config.json)
+	go run ./cmd/web
+
+run-worker: ## Jalankan worker secara lokal
+	go run ./cmd/worker
 
 test: ## Jalankan unit test
 	go test ./internal/...
@@ -32,3 +38,23 @@ mocks: ## Generate ulang mock dari interface di internal/usecase/ports.go
 
 create-admin: ## Jadikan user sebagai admin, contoh: make create-admin EMAIL=admin@example.com
 	go run ./cmd/cli create-admin --email $(EMAIL)
+
+MIGRATE_DB ?= mysql://gca:gca@tcp(mysql:3306)/golang_clean_architecture?multiStatements=true
+
+migrate-up: ## Terapkan semua migrasi (lewat docker compose)
+	docker compose run --rm migrate
+
+migrate-down: ## Batalkan satu migrasi terakhir
+	docker compose run --rm migrate -path /migrations -database "$(MIGRATE_DB)" down 1
+
+migrate-create: ## Buat file migrasi baru, contoh: make migrate-create NAME=create_table_orders
+	docker run --rm -v "$(CURDIR)/db/migrations:/migrations" migrate/migrate:v4.18.1 create -ext sql -dir /migrations -seq $(NAME)
+
+compose-up: ## Jalankan mode minimal (MySQL + web + worker)
+	docker compose up -d --build
+
+compose-full: ## Jalankan mode lengkap (Kafka, Redis, MinIO, Mailpit, Jaeger, Prometheus)
+	APP_ENV_FILE=deploy/full.env docker compose --profile full up -d --build
+
+compose-down: ## Hentikan semua container (data volume tetap ada)
+	docker compose --profile full down

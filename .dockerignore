@@ -1,0 +1,10 @@
+.git
+.github
+.idea
+.superpowers
+bin
+coverage.out
+.env
+*.md
+docs
+test
