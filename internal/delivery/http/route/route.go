@@ -14,6 +14,10 @@ type RouteConfig struct {
 	ContactController *http.ContactController
 	AddressController *http.AddressController
 	AuthMiddleware    fiber.Handler
+	// AuthRateLimit membatasi login dan registrasi per IP+email.
+	AuthRateLimit fiber.Handler
+	// RefreshRateLimit membatasi refresh token per IP.
+	RefreshRateLimit fiber.Handler
 }
 
 // Setup mendaftarkan semua route di bawah prefix /api/v1. Versi di URL
@@ -27,9 +31,9 @@ func (c *RouteConfig) Setup() {
 
 // setupGuestRoutes mendaftarkan endpoint yang bisa diakses tanpa login.
 func (c *RouteConfig) setupGuestRoutes(api fiber.Router) {
-	api.Post("/users", c.UserController.Register)
-	api.Post("/auth/login", c.AuthController.Login)
-	api.Post("/auth/refresh", c.AuthController.Refresh)
+	api.Post("/users", c.AuthRateLimit, c.UserController.Register)
+	api.Post("/auth/login", c.AuthRateLimit, c.AuthController.Login)
+	api.Post("/auth/refresh", c.RefreshRateLimit, c.AuthController.Refresh)
 	api.Post("/auth/logout", c.AuthController.Logout)
 }
 

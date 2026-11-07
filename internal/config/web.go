@@ -2,6 +2,7 @@ package config
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/http"
@@ -54,7 +55,14 @@ func BootstrapWeb(deps *WebDeps) {
 	})
 	addressUseCase := usecase.NewAddressUseCase(deps.Log, validate, tx, contactRepository, addressRepository, events)
 
-	// Delivery: controller, middleware, dan route.
+	// Delivery: middleware global, lalu controller dan route.
+	middleware.Apply(deps.App, middleware.StackConfig{
+		CORSOrigins:     deps.Config.Server.CORSOrigins,
+		RequestTimeout:  deps.Config.Server.RequestTimeout,
+		GlobalPerMinute: deps.Config.RateLimit.GlobalPerMinute,
+	}, deps.Log)
+
+	authLimit := deps.Config.RateLimit.AuthPerMinute
 	routes := route.RouteConfig{
 		App:               deps.App,
 		AuthController:    http.NewAuthController(authUseCase),
@@ -62,6 +70,8 @@ func BootstrapWeb(deps *WebDeps) {
 		ContactController: http.NewContactController(contactUseCase),
 		AddressController: http.NewAddressController(addressUseCase),
 		AuthMiddleware:    middleware.NewAuth(tokens),
+		AuthRateLimit:     middleware.NewRateLimiter(authLimit, time.Minute, middleware.IPAndEmailKey("auth"), nil),
+		RefreshRateLimit:  middleware.NewRateLimiter(authLimit, time.Minute, middleware.IPKey("refresh"), nil),
 	}
 	routes.Setup()
 }
