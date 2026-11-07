@@ -28,6 +28,7 @@ backend.
 | [02 Interface dan generics](02-interface-dan-generics.md) | Interface implisit, "accept interfaces", embedding, generics `Repository[T]` |
 | [03 Concurrency dan context](03-concurrency-dan-context.md) | Goroutine, channel, `select`, `sync`, `context.Context`, graceful shutdown |
 | [04 Testing di Go](04-testing-di-go.md) | `go test`, table test, testify, mock, integration test, mutation check |
+| [Dependency proyek](../dependencies.md) | `go.mod`, `go.sum`, semantic versioning, MVS, dan fungsi setiap library |
 
 ### Bagian 2: Membangun backend dengan Go
 
