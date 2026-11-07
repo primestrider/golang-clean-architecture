@@ -39,6 +39,9 @@ type ServerOptions struct {
 	MaxMessageBytes int
 	// RatePerMinute adalah batas RPC per menit per IP client (0 = tanpa batas).
 	RatePerMinute int
+	// TrustedProxies adalah IP/CIDR proxy yang metadata x-forwarded-for-nya
+	// boleh dipercaya untuk menentukan IP client.
+	TrustedProxies []string
 }
 
 // NewServer membuat server gRPC dengan kontrol yang setara dengan API HTTP.
@@ -65,7 +68,7 @@ func NewServer(opts ServerOptions) *grpc.Server {
 			requestIDInterceptor(),
 			logging.UnaryServerInterceptor(slogAdapter(opts.Log), logging.WithLogOnEvents(logging.FinishCall)),
 			serverMetrics.UnaryServerInterceptor(),
-			rateLimitInterceptor(opts.RatePerMinute),
+			rateLimitInterceptor(opts.RatePerMinute, opts.TrustedProxies),
 			timeoutInterceptor(opts.RequestTimeout),
 			authInterceptor(opts.Tokens),
 		),

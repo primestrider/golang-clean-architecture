@@ -20,5 +20,6 @@ func NewGRPCServer(cfg *Config, log *slog.Logger, comps *WebComponents) *grpc.Se
 		RequestTimeout:  cfg.Server.RequestTimeout,
 		MaxMessageBytes: cfg.Server.BodyLimit,
 		RatePerMinute:   cfg.RateLimit.GlobalPerMinute,
+		TrustedProxies:  cfg.Server.TrustedProxies,
 	})
 }
