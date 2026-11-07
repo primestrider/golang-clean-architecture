@@ -65,8 +65,11 @@ func TestContactGet_NotOwnedIsNotFound(t *testing.T) {
 func TestContactCreate_Success_PublishesEventInTransaction(t *testing.T) {
 	f := newContactFixture(t)
 	f.contacts.EXPECT().Create(mock.Anything, mock.AnythingOfType("*entity.Contact")).Return(nil)
-	f.events.EXPECT().Publish(mock.Anything, mock.Anything).RunAndReturn(func(context.Context, ...model.Event) error {
+	f.events.EXPECT().Publish(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, events ...model.Event) error {
 		assert.True(t, f.tx.inTx, "event must be published inside the transaction")
+		require.Len(t, events, 1)
+		assert.Equal(t, "contact.created", events[0].EventType)
+		assert.NotContains(t, string(events[0].Data), "user_id")
 		return nil
 	}).Once()
 

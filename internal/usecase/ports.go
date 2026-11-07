@@ -90,3 +90,8 @@ type AddressRepository interface {
 type AuditRepository interface {
 	Create(ctx context.Context, log *entity.AuditLog) error
 }
+
+// OutboxRepository menyimpan dan mengelola event di tabel outbox.
+type OutboxRepository interface {
+	Insert(ctx context.Context, events ...entity.OutboxEvent) error
+}

@@ -38,8 +38,8 @@ func BootstrapWeb(deps *WebDeps) {
 	// Penerbit dan pemverifikasi access token JWT.
 	tokens := NewTokenIssuer(deps.Config)
 
-	// Publisher event.
-	events := usecase.NewNoopEventPublisher(deps.Log)
+	// Publisher event: event ditulis ke tabel outbox di transaksi bisnis.
+	events := usecase.NewOutboxPublisher(repository.NewOutboxRepository(deps.DB))
 
 	// Use case: logika bisnis.
 	validate := validation.New()

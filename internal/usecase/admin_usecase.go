@@ -73,7 +73,7 @@ func (c *AdminUseCase) ChangeRole(ctx context.Context, req *model.ChangeRoleRequ
 		if err := c.audit.Record(ctx, "user.role_changed", "user", user.ID, before, converter.UserToResponse(user)); err != nil {
 			return err
 		}
-		return c.events.Publish(ctx, converter.UserToEvent(user))
+		return publish(ctx, c.events, "user.role_changed", user.ID, converter.UserToResponse(user))
 	})
 	if err != nil {
 		return nil, err
@@ -100,7 +100,7 @@ func (c *AdminUseCase) PromoteByEmail(ctx context.Context, email string) (*model
 		if err := c.audit.Record(ctx, "user.role_changed", "user", user.ID, before, converter.UserToResponse(user)); err != nil {
 			return err
 		}
-		return c.events.Publish(ctx, converter.UserToEvent(user))
+		return publish(ctx, c.events, "user.role_changed", user.ID, converter.UserToResponse(user))
 	})
 	if err != nil {
 		return nil, err

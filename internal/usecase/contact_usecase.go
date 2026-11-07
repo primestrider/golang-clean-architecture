@@ -52,7 +52,7 @@ func (c *ContactUseCase) Create(ctx context.Context, req *model.CreateContactReq
 		if err := c.audit.Record(ctx, "contact.created", "contact", contact.ID, nil, converter.ContactToResponse(contact)); err != nil {
 			return err
 		}
-		return c.events.Publish(ctx, converter.ContactToEvent(contact))
+		return publish(ctx, c.events, "contact.created", contact.ID, converter.ContactToResponse(contact))
 	})
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func (c *ContactUseCase) Update(ctx context.Context, req *model.UpdateContactReq
 		if err := c.audit.Record(ctx, "contact.updated", "contact", contact.ID, before, converter.ContactToResponse(contact)); err != nil {
 			return err
 		}
-		return c.events.Publish(ctx, converter.ContactToEvent(contact))
+		return publish(ctx, c.events, "contact.updated", contact.ID, converter.ContactToResponse(contact))
 	})
 	if err != nil {
 		return nil, err
@@ -122,7 +122,10 @@ func (c *ContactUseCase) Delete(ctx context.Context, req *model.DeleteContactReq
 		if err := c.contacts.Delete(ctx, contact); err != nil {
 			return err
 		}
-		return c.audit.Record(ctx, "contact.deleted", "contact", contact.ID, converter.ContactToResponse(contact), nil)
+		if err := c.audit.Record(ctx, "contact.deleted", "contact", contact.ID, converter.ContactToResponse(contact), nil); err != nil {
+			return err
+		}
+		return publish(ctx, c.events, "contact.deleted", contact.ID, converter.ContactToResponse(contact))
 	})
 }
 

@@ -66,7 +66,7 @@ func (c *UserUseCase) Create(ctx context.Context, req *model.RegisterUserRequest
 		if err := c.audit.Record(ctx, "user.registered", "user", user.ID, nil, converter.UserToResponse(user)); err != nil {
 			return err
 		}
-		return c.events.Publish(ctx, converter.UserToEvent(user))
+		return publish(ctx, c.events, "user.registered", user.ID, converter.UserToResponse(user))
 	})
 	if err != nil {
 		return nil, err
@@ -137,7 +137,7 @@ func (c *UserUseCase) Update(ctx context.Context, req *model.UpdateUserRequest) 
 				return err
 			}
 		}
-		return c.events.Publish(ctx, converter.UserToEvent(user))
+		return publish(ctx, c.events, "user.updated", user.ID, converter.UserToResponse(user))
 	})
 	if err != nil {
 		return nil, err

@@ -58,7 +58,7 @@ func (c *AddressUseCase) Create(ctx context.Context, req *model.CreateAddressReq
 		if err := c.audit.Record(ctx, "address.created", "address", address.ID, nil, converter.AddressToResponse(address)); err != nil {
 			return err
 		}
-		return c.events.Publish(ctx, converter.AddressToEvent(address))
+		return publish(ctx, c.events, "address.created", address.ID, converter.AddressToResponse(address))
 	})
 	if err != nil {
 		return nil, err
@@ -94,7 +94,7 @@ func (c *AddressUseCase) Update(ctx context.Context, req *model.UpdateAddressReq
 		if err := c.audit.Record(ctx, "address.updated", "address", address.ID, before, converter.AddressToResponse(address)); err != nil {
 			return err
 		}
-		return c.events.Publish(ctx, converter.AddressToEvent(address))
+		return publish(ctx, c.events, "address.updated", address.ID, converter.AddressToResponse(address))
 	})
 	if err != nil {
 		return nil, err
@@ -133,7 +133,10 @@ func (c *AddressUseCase) Delete(ctx context.Context, req *model.DeleteAddressReq
 		if err := c.addresses.Delete(ctx, address); err != nil {
 			return err
 		}
-		return c.audit.Record(ctx, "address.deleted", "address", address.ID, converter.AddressToResponse(address), nil)
+		if err := c.audit.Record(ctx, "address.deleted", "address", address.ID, converter.AddressToResponse(address), nil); err != nil {
+			return err
+		}
+		return publish(ctx, c.events, "address.deleted", address.ID, converter.AddressToResponse(address))
 	})
 }
 

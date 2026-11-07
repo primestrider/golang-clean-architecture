@@ -68,7 +68,7 @@ func createAdmin(args []string) error {
 	defer sqlDB.Close()
 
 	admin := usecase.NewAdminUseCase(log, validation.New(), repository.NewTransactor(db),
-		repository.NewUserRepository(db), usecase.NewNoopEventPublisher(log),
+		repository.NewUserRepository(db), usecase.NewOutboxPublisher(repository.NewOutboxRepository(db)),
 		usecase.NewAuditRecorder(repository.NewAuditRepository(db)))
 	user, err := admin.PromoteByEmail(context.Background(), *email)
 	if err != nil {
