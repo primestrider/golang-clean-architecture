@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/metadata"
@@ -43,14 +44,29 @@ func TestLimiterKey_GroupsIPv6ByPrefix(t *testing.T) {
 	assert.Equal(t, "198.51.100.7", limiterKey("198.51.100.7"))
 }
 
-func TestIPLimiter_EvictsLeastRecentlyUsedWhenFull(t *testing.T) {
+func TestIPLimiter_EvictsOnlyFullyRefilledEntries(t *testing.T) {
 	l := newIPLimiter(1)
 	l.maxKeys = 2
 
 	assert.True(t, l.allow("a"))
 	assert.True(t, l.allow("b"))
-	assert.False(t, l.allow("a"), "a has used its budget; this also marks a as most recent")
-	assert.True(t, l.allow("c"), "new client gets its own bucket by evicting the least recently used (b)")
-	assert.False(t, l.allow("a"), "a keeps its exhausted bucket: eviction must not reset recently active clients")
+	// a dan b sedang di-throttle (budget habis). Mengeluarkan salah satunya
+	// akan me-reset budget-nya, jadi client baru memakai bucket overflow.
+	assert.True(t, l.allow("c"), "new client is served from the overflow bucket")
+	assert.False(t, l.allow("d"), "overflow bucket is shared while the table is full of throttled clients")
+	assert.False(t, l.allow("a"), "throttled clients are never reset by eviction")
 	assert.Equal(t, 2, l.size())
+}
+
+func TestIPLimiter_EvictsRefilledEntryForNewClient(t *testing.T) {
+	l := newIPLimiter(60) // 1 token per detik, burst 60
+	l.maxKeys = 1
+	now := time.Now()
+	l.now = func() time.Time { return now }
+
+	assert.True(t, l.allow("a")) // a tinggal 59 token, belum penuh
+	now = now.Add(2 * time.Minute)
+
+	assert.True(t, l.allow("b"), "a's bucket is full again, so evicting it changes nothing")
+	assert.Equal(t, 1, l.size())
 }

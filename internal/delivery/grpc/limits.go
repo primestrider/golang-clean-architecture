@@ -36,19 +36,23 @@ const defaultMaxLimiterKeys = 10000
 // ipLimiter adalah rate limiter token bucket per client, disimpan di memori
 // proses ini (untuk beberapa instance, batasnya berlaku per instance).
 //
-// Jumlah client yang dilacak dibatasi (maxKeys) dengan strategi LRU: bila
-// penuh, client yang paling lama tidak aktif dikeluarkan untuk memberi
-// tempat client baru. Semua operasi O(1), jadi banjir alamat baru tidak
-// membebani CPU, dan setiap client tetap punya bucket sendiri. Untuk
-// serangan dari puluhan ribu IP sekaligus, pertahanan sebaiknya dipasang di
-// edge (WAF atau load balancer), bukan di dalam aplikasi.
+// Jumlah client yang dilacak dibatasi (maxKeys) dengan LRU, tetapi entri
+// hanya dikeluarkan bila bucket-nya sudah terisi penuh kembali. Mengeluarkan
+// entri seperti itu tidak mengubah apa pun, karena bucket barunya juga penuh.
+// Client yang sedang di-throttle tidak pernah di-reset. Bila semua entri
+// sedang di-throttle (tanda serangan dari banyak alamat), client baru
+// memakai satu bucket overflow bersama. Semua operasi O(1). Serangan dari
+// puluhan ribu IP sebaiknya ditahan di edge (WAF atau load balancer).
 type ipLimiter struct {
-	mu      sync.Mutex
-	entries map[string]*list.Element
-	order   *list.List // depan = paling baru dipakai
-	limit   rate.Limit
-	burst   int
-	maxKeys int
+	mu       sync.Mutex
+	entries  map[string]*list.Element
+	order    *list.List // depan = paling baru dipakai
+	overflow *rate.Limiter
+	limit    rate.Limit
+	burst    int
+	maxKeys  int
+	// now disuntikkan supaya pengisian ulang token bisa diuji.
+	now func() time.Time
 }
 
 // lruEntry adalah satu client di dalam LRU.
@@ -59,12 +63,15 @@ type lruEntry struct {
 
 // newIPLimiter membuat limiter dengan batas perMinute request per client.
 func newIPLimiter(perMinute int) *ipLimiter {
+	limit := rate.Limit(float64(perMinute) / 60)
 	return &ipLimiter{
-		entries: map[string]*list.Element{},
-		order:   list.New(),
-		limit:   rate.Limit(float64(perMinute) / 60),
-		burst:   perMinute,
-		maxKeys: defaultMaxLimiterKeys,
+		entries:  map[string]*list.Element{},
+		order:    list.New(),
+		overflow: rate.NewLimiter(limit, perMinute),
+		limit:    limit,
+		burst:    perMinute,
+		maxKeys:  defaultMaxLimiterKeys,
+		now:      time.Now,
 	}
 }
 
@@ -73,22 +80,26 @@ func newIPLimiter(perMinute int) *ipLimiter {
 func (l *ipLimiter) allow(key string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	now := l.now()
 
 	if el, ok := l.entries[key]; ok {
 		l.order.MoveToFront(el)
 		entry, _ := el.Value.(*lruEntry)
-		return entry.limiter.Allow()
+		return entry.limiter.AllowN(now, 1)
 	}
 	if l.order.Len() >= l.maxKeys {
 		oldest := l.order.Back()
-		l.order.Remove(oldest)
-		if entry, ok := oldest.Value.(*lruEntry); ok {
-			delete(l.entries, entry.key)
+		entry, _ := oldest.Value.(*lruEntry)
+		if entry.limiter.TokensAt(now) < float64(l.burst) {
+			// Entri terlama masih di-throttle: jangan di-reset.
+			return l.overflow.AllowN(now, 1)
 		}
+		l.order.Remove(oldest)
+		delete(l.entries, entry.key)
 	}
 	entry := &lruEntry{key: key, limiter: rate.NewLimiter(l.limit, l.burst)}
 	l.entries[key] = l.order.PushFront(entry)
-	return entry.limiter.Allow()
+	return entry.limiter.AllowN(now, 1)
 }
 
 // size mengembalikan jumlah client yang sedang dilacak.
