@@ -10,7 +10,7 @@ mendemokan semua aspek backend: autentikasi, otorisasi, transaksi, event,
 observability, testing, dan deployment.
 
 > **Baru belajar Go atau backend?** Mulai dari
-> [materi pembelajaran](docs/belajar/README.md): dasar bahasa Go sampai
+> [materi pembelajaran](docs/learning/README.md): dasar bahasa Go sampai
 > membangun fitur backend lengkap, semuanya memakai kode di repo ini.
 
 ## Isi
@@ -300,4 +300,4 @@ Contoh: menambah entity "order".
    (`internal/config/worker.go`).
 
 Tutorial langkah demi langkah dengan contoh lengkap ada di
-[docs/belajar/11-tutorial-fitur-baru.md](docs/belajar/11-tutorial-fitur-baru.md).
+[docs/learning/11-tutorial-fitur-baru.md](docs/learning/11-tutorial-fitur-baru.md).
