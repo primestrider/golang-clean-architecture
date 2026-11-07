@@ -9,6 +9,7 @@ import (
 // mendaftarkan route.
 type RouteConfig struct {
 	App               *fiber.App
+	AuthController    *http.AuthController
 	UserController    *http.UserController
 	ContactController *http.ContactController
 	AddressController *http.AddressController
@@ -27,6 +28,9 @@ func (c *RouteConfig) Setup() {
 // setupGuestRoutes mendaftarkan endpoint yang bisa diakses tanpa login.
 func (c *RouteConfig) setupGuestRoutes(api fiber.Router) {
 	api.Post("/users", c.UserController.Register)
+	api.Post("/auth/login", c.AuthController.Login)
+	api.Post("/auth/refresh", c.AuthController.Refresh)
+	api.Post("/auth/logout", c.AuthController.Logout)
 }
 
 // setupAuthRoutes mendaftarkan endpoint yang membutuhkan login.

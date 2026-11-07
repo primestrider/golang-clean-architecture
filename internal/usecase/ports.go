@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"time"
 
 	"github.com/primestrider/golang-clean-architecture/internal/entity"
 	"github.com/primestrider/golang-clean-architecture/internal/model"
@@ -40,9 +41,26 @@ type UserRepository interface {
 
 // RefreshTokenRepository adalah akses data refresh token.
 type RefreshTokenRepository interface {
+	Create(ctx context.Context, token *entity.RefreshToken) error
+	// FindByHashForUpdate mencari token berdasarkan hash dan mengunci barisnya
+	// (SELECT ... FOR UPDATE) sampai transaksi selesai. Penguncian ini
+	// membuat dua request refresh yang bersamaan diproses satu per satu.
+	FindByHashForUpdate(ctx context.Context, hash string) (*entity.RefreshToken, error)
+	// Revoke mencabut satu token dan mencatat token penggantinya (bila ada).
+	Revoke(ctx context.Context, id string, replacedByID *string) error
+	// RevokeFamily mencabut semua token dalam satu keluarga rotasi.
+	RevokeFamily(ctx context.Context, familyID string) error
 	// RevokeAllForUser mencabut semua refresh token aktif milik user,
 	// misalnya setelah password diganti.
 	RevokeAllForUser(ctx context.Context, userID string) error
+	// DeleteExpiredBefore menghapus token yang kedaluwarsa atau dicabut
+	// sebelum cutoff (epoch milidetik) dan mengembalikan jumlah yang dihapus.
+	DeleteExpiredBefore(ctx context.Context, cutoff int64) (int64, error)
+}
+
+// TokenIssuer menerbitkan access token untuk user.
+type TokenIssuer interface {
+	Issue(userID, role string) (token string, expiresAt time.Time, err error)
 }
 
 // ContactRepository adalah akses data kontak yang dibutuhkan use case.

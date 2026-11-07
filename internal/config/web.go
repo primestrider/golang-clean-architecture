@@ -43,11 +43,21 @@ func BootstrapWeb(deps *WebDeps) {
 	validate := validation.New()
 	userUseCase := usecase.NewUserUseCase(deps.Log, validate, tx, userRepository, refreshTokenRepository, events)
 	contactUseCase := usecase.NewContactUseCase(deps.Log, validate, tx, contactRepository, events)
+	authUseCase := usecase.NewAuthUseCase(usecase.AuthDeps{
+		Log:        deps.Log,
+		Validate:   validate,
+		Tx:         tx,
+		Users:      userRepository,
+		Tokens:     refreshTokenRepository,
+		Issuer:     tokens,
+		RefreshTTL: deps.Config.JWT.RefreshTTL,
+	})
 	addressUseCase := usecase.NewAddressUseCase(deps.Log, validate, tx, contactRepository, addressRepository, events)
 
 	// Delivery: controller, middleware, dan route.
 	routes := route.RouteConfig{
 		App:               deps.App,
+		AuthController:    http.NewAuthController(authUseCase),
 		UserController:    http.NewUserController(userUseCase),
 		ContactController: http.NewContactController(contactUseCase),
 		AddressController: http.NewAddressController(addressUseCase),
