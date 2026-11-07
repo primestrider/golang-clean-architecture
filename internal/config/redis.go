@@ -20,7 +20,10 @@ func NewRedis(cfg *Config) (*redis.Client, error) {
 		Password: cfg.Redis.Password,
 		DB:       cfg.Redis.DB,
 	})
-	if err := redisotel.InstrumentTracing(client); err != nil {
+	// WithDBStatement(false): span hanya memuat nama perintah, bukan isi
+	// perintahnya. Nilai cache (data kontak) dan key rate limit (berisi
+	// email) adalah data pribadi yang tidak boleh terkirim ke sistem tracing.
+	if err := redisotel.InstrumentTracing(client, redisotel.WithDBStatement(false)); err != nil {
 		return nil, fmt.Errorf("instrument redis tracing: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
