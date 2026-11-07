@@ -32,16 +32,19 @@ func TestSendWelcome_SendsToRegisteredEmail(t *testing.T) {
 
 	require.Len(t, mailer.sent, 1)
 	assert.Equal(t, "eko@example.com", mailer.sent[0].To)
-	assert.Contains(t, mailer.sent[0].HTMLBody, "Eko")
-	assert.Contains(t, mailer.sent[0].TextBody, "Eko")
+	assert.Contains(t, mailer.sent[0].TextBody, "eko@example.com")
 }
 
-func TestSendWelcome_EscapesName(t *testing.T) {
+// TestSendWelcome_DoesNotIncludeUserSuppliedName: alamat email belum
+// diverifikasi, jadi siapa pun bisa mendaftarkan email orang lain. Nama
+// diisi bebas oleh pendaftar dan bisa berisi teks phishing ("klik
+// http://..."), sehingga tidak boleh ikut dikirim ke alamat tersebut.
+func TestSendWelcome_DoesNotIncludeUserSuppliedName(t *testing.T) {
 	mailer := &fakeMailer{}
 	uc := usecase.NewNotificationUseCase(discardLogger(), mailer)
 
-	require.NoError(t, uc.SendWelcome(context.Background(), registeredEvent(t, "<script>alert(1)</script>")))
+	require.NoError(t, uc.SendWelcome(context.Background(), registeredEvent(t, "Verify at http://evil.example")))
 
-	assert.NotContains(t, mailer.sent[0].HTMLBody, "<script>")
-	assert.Contains(t, mailer.sent[0].HTMLBody, "&lt;script&gt;")
+	assert.NotContains(t, mailer.sent[0].HTMLBody, "evil.example")
+	assert.NotContains(t, mailer.sent[0].TextBody, "evil.example")
 }

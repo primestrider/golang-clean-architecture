@@ -39,9 +39,11 @@ func NewNotificationUseCase(log *slog.Logger, mailer Mailer) *NotificationUseCas
 
 // SendWelcome mengirim email selamat datang untuk event user.registered.
 //
-// Template HTML memakai html/template yang otomatis meng-escape data,
-// sehingga nama berisi HTML (misalnya "<script>") tampil sebagai teks biasa
-// dan tidak bisa menyisipkan kode ke email.
+// Email sengaja tidak memuat nama yang diisi pendaftar. Alamat email belum
+// diverifikasi, jadi siapa pun bisa mendaftarkan email orang lain; bila nama
+// ikut dikirim, penyerang bisa mengisi nama dengan teks phishing yang lalu
+// terkirim dari domain resmi aplikasi. Template HTML tetap memakai
+// html/template yang meng-escape data sebagai lapisan pengaman tambahan.
 func (c *NotificationUseCase) SendWelcome(ctx context.Context, e model.Event) error {
 	var user model.UserResponse
 	if err := json.Unmarshal(e.Data, &user); err != nil {

@@ -1,5 +1,5 @@
-Halo, {{.Name}}!
+Selamat datang!
 
-Terima kasih sudah mendaftar. Akun Anda dengan email {{.Email}} sudah aktif.
+Akun dengan email {{.Email}} baru saja didaftarkan.
 
 Bila Anda tidak merasa mendaftar, abaikan email ini.
