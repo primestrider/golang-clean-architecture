@@ -50,13 +50,16 @@ func (r *OutboxRepository) MarkPublished(ctx context.Context, id string, at int6
 
 // MarkFailedAttempt mencatat satu percobaan kirim yang gagal. Bila jumlah
 // percobaan mencapai maxAttempts, status menjadi failed (diparkir).
+//
+// SQL ditulis eksplisit karena MySQL mengevaluasi assignment di UPDATE dari
+// kiri ke kanan: status harus dihitung dari nilai attempts SEBELUM dinaikkan,
+// jadi assignment status wajib berada sebelum assignment attempts.
 func (r *OutboxRepository) MarkFailedAttempt(ctx context.Context, id, errMsg string, maxAttempts int) error {
-	return r.db(ctx).Model(&entity.OutboxEvent{}).Where("id = ?", id).
-		Updates(map[string]any{
-			"attempts":   gorm.Expr("attempts + 1"),
-			"last_error": errMsg,
-			"status":     gorm.Expr("CASE WHEN attempts + 1 >= ? THEN ? ELSE status END", maxAttempts, entity.OutboxFailed),
-		}).Error
+	return r.db(ctx).Exec(`UPDATE outbox_events
+		SET status = CASE WHEN attempts + 1 >= ? THEN ? ELSE status END,
+		    attempts = attempts + 1,
+		    last_error = ?
+		WHERE id = ?`, maxAttempts, entity.OutboxFailed, errMsg, id).Error
 }
 
 // CountByStatus menghitung jumlah event per status (untuk metrik).

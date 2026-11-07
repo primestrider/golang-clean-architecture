@@ -1,10 +1,10 @@
-// Command worker menjalankan pekerjaan latar belakang: consumer Kafka
-// (dan, di tahap berikutnya, outbox relay serta scheduler) beserta server
-// admin untuk health check dan metrics.
+// Command worker menjalankan pekerjaan latar belakang: outbox relay,
+// consumer Kafka, dan (di tahap berikutnya) scheduler, beserta server admin
+// untuk health check dan metrics.
 //
 // Seperti binary web, worker melakukan graceful shutdown saat menerima
-// SIGINT/SIGTERM: berhenti mengambil pesan baru, menunggu pesan yang
-// sedang diproses selesai, lalu keluar.
+// SIGINT/SIGTERM: berhenti mengambil pekerjaan baru, menunggu pekerjaan yang
+// sedang berjalan selesai, lalu menutup koneksi.
 package main
 
 import (
@@ -14,12 +14,10 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
 	"github.com/primestrider/golang-clean-architecture/internal/config"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/admin"
-	"github.com/primestrider/golang-clean-architecture/internal/delivery/messaging"
 )
 
 func main() {
@@ -37,28 +35,31 @@ func run() error {
 	}
 	log := config.NewLogger(cfg).With("component", "worker")
 
+	db, err := config.NewDatabase(cfg, log)
+	if err != nil {
+		return err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+
+	worker, err := config.BootstrapWorker(&config.WorkerDeps{Config: cfg, Log: log, DB: db})
+	if err != nil {
+		return err
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	adminServer := admin.NewServer(fmt.Sprintf(":%d", cfg.Admin.WorkerPort), log, map[string]admin.Check{})
+	adminServer := admin.NewServer(fmt.Sprintf(":%d", cfg.Admin.WorkerPort), log, map[string]admin.Check{
+		"db": sqlDB.PingContext,
+	})
 	adminErr := make(chan error, 1)
 	go func() { adminErr <- adminServer.Start() }()
 
-	// Setiap pekerjaan latar belakang didaftarkan ke WaitGroup supaya saat
-	// shutdown kita bisa menunggu semuanya selesai.
-	var wg sync.WaitGroup
-	if cfg.Kafka.Enabled {
-		handler := messaging.NewLoggingHandler(log)
-		for _, topic := range []string{"users", "contacts", "addresses"} {
-			group, err := config.NewKafkaConsumerGroup(cfg)
-			if err != nil {
-				return err
-			}
-			wg.Go(func() { messaging.ConsumeTopic(ctx, group, topic, log, handler) })
-		}
-	} else {
-		log.Info("kafka disabled, consumers not started")
-	}
+	jobsDone := make(chan struct{})
+	go func() { worker.Run(ctx); close(jobsDone) }()
 
 	var runErr error
 	select {
@@ -73,15 +74,13 @@ func run() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Shutdown.Timeout)
 	defer cancel()
 
-	done := make(chan struct{})
-	go func() { wg.Wait(); close(done) }()
 	select {
-	case <-done:
+	case <-jobsDone:
 	case <-shutdownCtx.Done():
 		log.Warn("shutdown timeout reached before background jobs finished")
 	}
 
-	err = errors.Join(runErr, adminServer.Shutdown(shutdownCtx))
+	err = errors.Join(runErr, adminServer.Shutdown(shutdownCtx), worker.Close(), sqlDB.Close())
 	log.Info("shutdown complete")
 	return err
 }
