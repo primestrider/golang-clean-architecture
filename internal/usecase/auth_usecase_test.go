@@ -39,6 +39,7 @@ func newAuthFixture(t *testing.T) *authFixture {
 		Users:        f.users,
 		Tokens:       f.tokens,
 		Issuer:       f.issuer,
+		Audit:        newAudit(),
 		RefreshTTL:   7 * 24 * time.Hour,
 		Now:          func() time.Time { return authNow },
 		CompareDummy: func(string) { f.dummyCalls++ },

@@ -28,6 +28,7 @@ type AuthDeps struct {
 	Users      UserRepository
 	Tokens     RefreshTokenRepository
 	Issuer     TokenIssuer
+	Audit      *AuditRecorder
 	RefreshTTL time.Duration
 	// Now mengembalikan waktu sekarang; disuntikkan supaya kedaluwarsa bisa
 	// diuji. Nil berarti time.Now.
@@ -121,7 +122,10 @@ func (c *AuthUseCase) Refresh(ctx context.Context, req *model.RefreshRequest) (*
 			reused = true
 			c.deps.Log.WarnContext(ctx, "refresh token reuse detected, revoking token family",
 				"user_id", old.UserID, "family_id", old.FamilyID)
-			return c.deps.Tokens.RevokeFamily(ctx, old.FamilyID)
+			if err := c.deps.Tokens.RevokeFamily(ctx, old.FamilyID); err != nil {
+				return err
+			}
+			return c.deps.Audit.Record(ctx, "auth.refresh_reuse_detected", "user", old.UserID, nil, nil)
 		}
 		if old.ExpiresAt <= c.deps.Now().UnixMilli() {
 			return apperror.Unauthorized("refresh token expired")

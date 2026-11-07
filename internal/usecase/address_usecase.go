@@ -23,12 +23,13 @@ type AddressUseCase struct {
 	contacts  ContactRepository
 	addresses AddressRepository
 	events    EventPublisher
+	audit     *AuditRecorder
 }
 
 // NewAddressUseCase membuat AddressUseCase dengan dependency-nya.
 func NewAddressUseCase(log *slog.Logger, validate *validation.Validator, tx Transactor,
-	contacts ContactRepository, addresses AddressRepository, events EventPublisher) *AddressUseCase {
-	return &AddressUseCase{log: log, validate: validate, tx: tx, contacts: contacts, addresses: addresses, events: events}
+	contacts ContactRepository, addresses AddressRepository, events EventPublisher, audit *AuditRecorder) *AddressUseCase {
+	return &AddressUseCase{log: log, validate: validate, tx: tx, contacts: contacts, addresses: addresses, events: events, audit: audit}
 }
 
 // Create menambahkan alamat ke kontak milik user yang login.
@@ -52,6 +53,9 @@ func (c *AddressUseCase) Create(ctx context.Context, req *model.CreateAddressReq
 			return err
 		}
 		if err := c.addresses.Create(ctx, address); err != nil {
+			return err
+		}
+		if err := c.audit.Record(ctx, "address.created", "address", address.ID, nil, converter.AddressToResponse(address)); err != nil {
 			return err
 		}
 		return c.events.Publish(ctx, converter.AddressToEvent(address))
@@ -78,12 +82,16 @@ func (c *AddressUseCase) Update(ctx context.Context, req *model.UpdateAddressReq
 		if err != nil {
 			return err
 		}
+		before := converter.AddressToResponse(address)
 		address.Street = req.Street
 		address.City = req.City
 		address.Province = req.Province
 		address.PostalCode = req.PostalCode
 		address.Country = req.Country
 		if err := c.addresses.UpdateWithVersion(ctx, address, req.Version); err != nil {
+			return err
+		}
+		if err := c.audit.Record(ctx, "address.updated", "address", address.ID, before, converter.AddressToResponse(address)); err != nil {
 			return err
 		}
 		return c.events.Publish(ctx, converter.AddressToEvent(address))
@@ -122,7 +130,10 @@ func (c *AddressUseCase) Delete(ctx context.Context, req *model.DeleteAddressReq
 		if err != nil {
 			return err
 		}
-		return c.addresses.Delete(ctx, address)
+		if err := c.addresses.Delete(ctx, address); err != nil {
+			return err
+		}
+		return c.audit.Record(ctx, "address.deleted", "address", address.ID, converter.AddressToResponse(address), nil)
 	})
 }
 

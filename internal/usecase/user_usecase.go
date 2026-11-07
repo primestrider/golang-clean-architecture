@@ -23,12 +23,13 @@ type UserUseCase struct {
 	users    UserRepository
 	tokens   RefreshTokenRepository
 	events   EventPublisher
+	audit    *AuditRecorder
 }
 
 // NewUserUseCase membuat UserUseCase dengan dependency-nya.
 func NewUserUseCase(log *slog.Logger, validate *validation.Validator, tx Transactor,
-	users UserRepository, tokens RefreshTokenRepository, events EventPublisher) *UserUseCase {
-	return &UserUseCase{log: log, validate: validate, tx: tx, users: users, tokens: tokens, events: events}
+	users UserRepository, tokens RefreshTokenRepository, events EventPublisher, audit *AuditRecorder) *UserUseCase {
+	return &UserUseCase{log: log, validate: validate, tx: tx, users: users, tokens: tokens, events: events, audit: audit}
 }
 
 // NormalizeEmail merapikan email (huruf kecil, tanpa spasi di tepi) supaya
@@ -60,6 +61,9 @@ func (c *UserUseCase) Create(ctx context.Context, req *model.RegisterUserRequest
 
 	err = c.tx.WithinTransaction(ctx, func(ctx context.Context) error {
 		if err := c.users.Create(ctx, user); err != nil {
+			return err
+		}
+		if err := c.audit.Record(ctx, "user.registered", "user", user.ID, nil, converter.UserToResponse(user)); err != nil {
 			return err
 		}
 		return c.events.Publish(ctx, converter.UserToEvent(user))
@@ -100,6 +104,7 @@ func (c *UserUseCase) Update(ctx context.Context, req *model.UpdateUserRequest) 
 		if err != nil {
 			return err
 		}
+		before := converter.UserToResponse(user)
 		if req.Name != "" {
 			user.Name = req.Name
 		}
@@ -120,8 +125,15 @@ func (c *UserUseCase) Update(ctx context.Context, req *model.UpdateUserRequest) 
 		if err := c.users.UpdateWithVersion(ctx, user, req.Version); err != nil {
 			return err
 		}
+		if err := c.audit.Record(ctx, "user.updated", "user", user.ID, before, converter.UserToResponse(user)); err != nil {
+			return err
+		}
 		if passwordChanged {
 			if err := c.tokens.RevokeAllForUser(ctx, user.ID); err != nil {
+				return err
+			}
+			// Hanya fakta "password diganti" yang dicatat, tanpa nilai apa pun.
+			if err := c.audit.Record(ctx, "user.password_changed", "user", user.ID, nil, nil); err != nil {
 				return err
 			}
 		}

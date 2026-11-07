@@ -18,7 +18,7 @@ func TestAddressCreate_ContactNotOwned(t *testing.T) {
 	contacts := mocks.NewContactRepository(t)
 	addresses := mocks.NewAddressRepository(t)
 	events := mocks.NewEventPublisher(t)
-	uc := usecase.NewAddressUseCase(discardLogger(), newValidator(), &fakeTransactor{}, contacts, addresses, events)
+	uc := usecase.NewAddressUseCase(discardLogger(), newValidator(), &fakeTransactor{}, contacts, addresses, events, newAudit())
 	contacts.EXPECT().FindByIDAndUserID(mock.Anything, contactID, "intruder").Return(nil, apperror.NotFound("contact"))
 
 	_, err := uc.Create(context.Background(), &model.CreateAddressRequest{UserID: "intruder", ContactID: contactID, City: "Jakarta"})

@@ -17,7 +17,7 @@ import (
 func newAdminUseCase(t *testing.T) (*usecase.AdminUseCase, *mocks.UserRepository, *mocks.EventPublisher) {
 	users := mocks.NewUserRepository(t)
 	events := mocks.NewEventPublisher(t)
-	return usecase.NewAdminUseCase(discardLogger(), newValidator(), &fakeTransactor{}, users, events), users, events
+	return usecase.NewAdminUseCase(discardLogger(), newValidator(), &fakeTransactor{}, users, events, newAudit()), users, events
 }
 
 func TestChangeRole_CannotDemoteSelf(t *testing.T) {

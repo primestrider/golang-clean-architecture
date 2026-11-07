@@ -29,7 +29,7 @@ func newContactFixture(t *testing.T) *contactFixture {
 		addresses: mocks.NewAddressRepository(t),
 		events:    mocks.NewEventPublisher(t),
 	}
-	f.uc = usecase.NewContactUseCase(discardLogger(), newValidator(), f.tx, f.contacts, f.addresses, f.events)
+	f.uc = usecase.NewContactUseCase(discardLogger(), newValidator(), f.tx, f.contacts, f.addresses, f.events, newAudit())
 	return f
 }
 

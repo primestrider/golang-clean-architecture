@@ -28,7 +28,7 @@ func newUserFixture(t *testing.T) *userFixture {
 		tokens: mocks.NewRefreshTokenRepository(t),
 		events: mocks.NewEventPublisher(t),
 	}
-	f.uc = usecase.NewUserUseCase(discardLogger(), newValidator(), &fakeTransactor{}, f.users, f.tokens, f.events)
+	f.uc = usecase.NewUserUseCase(discardLogger(), newValidator(), &fakeTransactor{}, f.users, f.tokens, f.events, newAudit())
 	return f
 }
 

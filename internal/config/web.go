@@ -33,6 +33,7 @@ func BootstrapWeb(deps *WebDeps) {
 	contactRepository := repository.NewContactRepository(deps.DB)
 	addressRepository := repository.NewAddressRepository(deps.DB)
 	refreshTokenRepository := repository.NewRefreshTokenRepository(deps.DB)
+	audit := usecase.NewAuditRecorder(repository.NewAuditRepository(deps.DB))
 
 	// Penerbit dan pemverifikasi access token JWT.
 	tokens := NewTokenIssuer(deps.Config)
@@ -42,8 +43,8 @@ func BootstrapWeb(deps *WebDeps) {
 
 	// Use case: logika bisnis.
 	validate := validation.New()
-	userUseCase := usecase.NewUserUseCase(deps.Log, validate, tx, userRepository, refreshTokenRepository, events)
-	contactUseCase := usecase.NewContactUseCase(deps.Log, validate, tx, contactRepository, addressRepository, events)
+	userUseCase := usecase.NewUserUseCase(deps.Log, validate, tx, userRepository, refreshTokenRepository, events, audit)
+	contactUseCase := usecase.NewContactUseCase(deps.Log, validate, tx, contactRepository, addressRepository, events, audit)
 	authUseCase := usecase.NewAuthUseCase(usecase.AuthDeps{
 		Log:        deps.Log,
 		Validate:   validate,
@@ -51,10 +52,11 @@ func BootstrapWeb(deps *WebDeps) {
 		Users:      userRepository,
 		Tokens:     refreshTokenRepository,
 		Issuer:     tokens,
+		Audit:      audit,
 		RefreshTTL: deps.Config.JWT.RefreshTTL,
 	})
-	adminUseCase := usecase.NewAdminUseCase(deps.Log, validate, tx, userRepository, events)
-	addressUseCase := usecase.NewAddressUseCase(deps.Log, validate, tx, contactRepository, addressRepository, events)
+	adminUseCase := usecase.NewAdminUseCase(deps.Log, validate, tx, userRepository, events, audit)
+	addressUseCase := usecase.NewAddressUseCase(deps.Log, validate, tx, contactRepository, addressRepository, events, audit)
 
 	// Delivery: middleware global, lalu controller dan route.
 	middleware.Apply(deps.App, middleware.StackConfig{

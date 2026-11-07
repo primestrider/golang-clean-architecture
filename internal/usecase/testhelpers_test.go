@@ -5,6 +5,8 @@ import (
 	"log/slog"
 
 	"github.com/primestrider/golang-clean-architecture/internal/apperror"
+	"github.com/primestrider/golang-clean-architecture/internal/entity"
+	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 	"github.com/primestrider/golang-clean-architecture/internal/validation"
 )
 
@@ -22,6 +24,16 @@ func (f *fakeTransactor) WithinTransaction(ctx context.Context, fn func(ctx cont
 	defer func() { f.inTx = false }()
 	return fn(ctx)
 }
+
+// fakeAuditRepo menerima catatan audit tanpa menyimpannya.
+type fakeAuditRepo struct{ actions []string }
+
+func (f *fakeAuditRepo) Create(_ context.Context, log *entity.AuditLog) error {
+	f.actions = append(f.actions, log.Action)
+	return nil
+}
+
+func newAudit() *usecase.AuditRecorder { return usecase.NewAuditRecorder(&fakeAuditRepo{}) }
 
 func discardLogger() *slog.Logger { return slog.New(slog.DiscardHandler) }
 

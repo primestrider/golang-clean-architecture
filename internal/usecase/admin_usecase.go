@@ -20,12 +20,13 @@ type AdminUseCase struct {
 	tx       Transactor
 	users    UserRepository
 	events   EventPublisher
+	audit    *AuditRecorder
 }
 
 // NewAdminUseCase membuat AdminUseCase.
 func NewAdminUseCase(log *slog.Logger, validate *validation.Validator, tx Transactor,
-	users UserRepository, events EventPublisher) *AdminUseCase {
-	return &AdminUseCase{log: log, validate: validate, tx: tx, users: users, events: events}
+	users UserRepository, events EventPublisher, audit *AuditRecorder) *AdminUseCase {
+	return &AdminUseCase{log: log, validate: validate, tx: tx, users: users, events: events, audit: audit}
 }
 
 // ListUsers mengembalikan satu halaman daftar user.
@@ -64,8 +65,12 @@ func (c *AdminUseCase) ChangeRole(ctx context.Context, req *model.ChangeRoleRequ
 		if err != nil {
 			return err
 		}
+		before := converter.UserToResponse(user)
 		user.Role = req.Role
 		if err := c.users.UpdateWithVersion(ctx, user, req.Version); err != nil {
+			return err
+		}
+		if err := c.audit.Record(ctx, "user.role_changed", "user", user.ID, before, converter.UserToResponse(user)); err != nil {
 			return err
 		}
 		return c.events.Publish(ctx, converter.UserToEvent(user))
@@ -87,8 +92,12 @@ func (c *AdminUseCase) PromoteByEmail(ctx context.Context, email string) (*model
 		if err != nil {
 			return err
 		}
+		before := converter.UserToResponse(user)
 		user.Role = entity.RoleAdmin
 		if err := c.users.Update(ctx, user); err != nil {
+			return err
+		}
+		if err := c.audit.Record(ctx, "user.role_changed", "user", user.ID, before, converter.UserToResponse(user)); err != nil {
 			return err
 		}
 		return c.events.Publish(ctx, converter.UserToEvent(user))

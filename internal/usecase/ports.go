@@ -85,3 +85,8 @@ type AddressRepository interface {
 	FindByIDAndContactID(ctx context.Context, id, contactID string) (*entity.Address, error)
 	FindAllByContactID(ctx context.Context, contactID string) ([]entity.Address, error)
 }
+
+// AuditRepository menyimpan jejak audit.
+type AuditRepository interface {
+	Create(ctx context.Context, log *entity.AuditLog) error
+}

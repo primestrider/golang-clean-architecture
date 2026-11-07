@@ -19,12 +19,13 @@ type ContactUseCase struct {
 	contacts  ContactRepository
 	addresses AddressRepository
 	events    EventPublisher
+	audit     *AuditRecorder
 }
 
 // NewContactUseCase membuat ContactUseCase dengan dependency-nya.
 func NewContactUseCase(log *slog.Logger, validate *validation.Validator, tx Transactor,
-	contacts ContactRepository, addresses AddressRepository, events EventPublisher) *ContactUseCase {
-	return &ContactUseCase{log: log, validate: validate, tx: tx, contacts: contacts, addresses: addresses, events: events}
+	contacts ContactRepository, addresses AddressRepository, events EventPublisher, audit *AuditRecorder) *ContactUseCase {
+	return &ContactUseCase{log: log, validate: validate, tx: tx, contacts: contacts, addresses: addresses, events: events, audit: audit}
 }
 
 // Create membuat kontak baru untuk user yang login. Penyimpanan kontak dan
@@ -48,6 +49,9 @@ func (c *ContactUseCase) Create(ctx context.Context, req *model.CreateContactReq
 		if err := c.contacts.Create(ctx, contact); err != nil {
 			return err
 		}
+		if err := c.audit.Record(ctx, "contact.created", "contact", contact.ID, nil, converter.ContactToResponse(contact)); err != nil {
+			return err
+		}
 		return c.events.Publish(ctx, converter.ContactToEvent(contact))
 	})
 	if err != nil {
@@ -69,11 +73,15 @@ func (c *ContactUseCase) Update(ctx context.Context, req *model.UpdateContactReq
 		if err != nil {
 			return err
 		}
+		before := converter.ContactToResponse(contact)
 		contact.FirstName = req.FirstName
 		contact.LastName = req.LastName
 		contact.Email = req.Email
 		contact.Phone = req.Phone
 		if err := c.contacts.UpdateWithVersion(ctx, contact, req.Version); err != nil {
+			return err
+		}
+		if err := c.audit.Record(ctx, "contact.updated", "contact", contact.ID, before, converter.ContactToResponse(contact)); err != nil {
 			return err
 		}
 		return c.events.Publish(ctx, converter.ContactToEvent(contact))
@@ -111,7 +119,10 @@ func (c *ContactUseCase) Delete(ctx context.Context, req *model.DeleteContactReq
 		if err := c.addresses.DeleteAllByContactID(ctx, contact.ID); err != nil {
 			return err
 		}
-		return c.contacts.Delete(ctx, contact)
+		if err := c.contacts.Delete(ctx, contact); err != nil {
+			return err
+		}
+		return c.audit.Record(ctx, "contact.deleted", "contact", contact.ID, converter.ContactToResponse(contact), nil)
 	})
 }
 
