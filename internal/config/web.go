@@ -7,7 +7,9 @@ import (
 	fiberotel "github.com/gofiber/contrib/v3/otel"
 	"github.com/gofiber/fiber/v3"
 	redisstorage "github.com/gofiber/storage/redis/v3"
+	"github.com/primestrider/golang-clean-architecture/api"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/http"
+	"github.com/primestrider/golang-clean-architecture/internal/delivery/http/docs"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/http/middleware"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/http/route"
 	"github.com/primestrider/golang-clean-architecture/internal/gateway/cache"
@@ -119,4 +121,8 @@ func BootstrapWeb(deps *WebDeps) {
 		RefreshRateLimit: middleware.NewRateLimiter(authLimit, time.Minute, middleware.IPKey("refresh"), limiterStorage),
 	}
 	routes.Setup()
+
+	if deps.Config.Docs.Enabled {
+		docs.Register(deps.App, api.OpenAPI)
+	}
 }
