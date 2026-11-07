@@ -1,0 +1,46 @@
+# Konfigurasi golangci-lint v2. Jalankan: make lint
+version: "2"
+
+run:
+  build-tags:
+    - integration
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose     # body respons HTTP harus ditutup
+    - errorlint     # bandingkan error dengan errors.Is/As, bukan ==
+    - gocritic      # saran gaya dan bug umum
+    - gosec         # pemeriksaan keamanan
+    - revive        # gaya kode, termasuk wajib doc comment pada simbol exported
+    - sqlclosecheck # sql.Rows/Stmt harus ditutup
+  settings:
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - disableStutteringCheck
+        - name: package-comments
+        - name: var-naming
+    gosec:
+      excludes:
+        - G104 # sudah dicakup errcheck
+  exclusions:
+    generated: lax
+    presets:
+      - std-error-handling
+    paths:
+      - internal/delivery/grpc/pb
+      - internal/usecase/mocks
+    rules:
+      # Test boleh lebih longgar soal keamanan dan doc comment.
+      - path: (_test\.go|test/)
+        linters: [gosec, revive]
+      # TestApp.Do sudah membaca dan menutup body respons.
+      - path: test/
+        linters: [bodyclose]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

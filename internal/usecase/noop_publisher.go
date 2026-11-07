@@ -21,7 +21,7 @@ func NewNoopEventPublisher(log *slog.Logger) *NoopEventPublisher {
 // Publish mencatat id setiap event di level debug.
 func (p *NoopEventPublisher) Publish(ctx context.Context, events ...model.Event) error {
 	for _, e := range events {
-		p.log.DebugContext(ctx, "event not published (noop publisher)", "event_id", e.GetId())
+		p.log.DebugContext(ctx, "event not published (noop publisher)", "event_id", e.GetID())
 	}
 	return nil
 }

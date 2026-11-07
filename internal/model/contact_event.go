@@ -1,5 +1,6 @@
 package model
 
+// ContactEvent adalah payload event perubahan kontak.
 type ContactEvent struct {
 	ID        string `json:"id"`
 	UserID    string `json:"user_id"`
@@ -11,6 +12,7 @@ type ContactEvent struct {
 	UpdatedAt int64  `json:"updated_at"`
 }
 
-func (c *ContactEvent) GetId() string {
+// GetID mengembalikan id entity sebagai key event.
+func (c *ContactEvent) GetID() string {
 	return c.ID
 }

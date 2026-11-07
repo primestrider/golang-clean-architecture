@@ -1,5 +1,7 @@
 package model
 
+// UserEvent adalah payload event perubahan user. Sengaja tidak memuat
+// password maupun token.
 type UserEvent struct {
 	ID        string `json:"id,omitempty"`
 	Name      string `json:"name,omitempty"`
@@ -7,6 +9,7 @@ type UserEvent struct {
 	UpdatedAt int64  `json:"updated_at,omitempty"`
 }
 
-func (u *UserEvent) GetId() string {
+// GetID mengembalikan id entity sebagai key event.
+func (u *UserEvent) GetID() string {
 	return u.ID
 }

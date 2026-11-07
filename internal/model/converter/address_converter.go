@@ -5,6 +5,7 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/model"
 )
 
+// AddressToResponse mengubah entity alamat menjadi respons API.
 func AddressToResponse(address *entity.Address) *model.AddressResponse {
 	return &model.AddressResponse{
 		ID:         address.ID,
@@ -18,6 +19,7 @@ func AddressToResponse(address *entity.Address) *model.AddressResponse {
 	}
 }
 
+// AddressToEvent membuat payload event dari entity alamat.
 func AddressToEvent(address *entity.Address) *model.AddressEvent {
 	return &model.AddressEvent{
 		ID:         address.ID,

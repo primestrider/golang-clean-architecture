@@ -48,12 +48,8 @@ func run() error {
 	// shutdown kita bisa menunggu semuanya selesai.
 	var wg sync.WaitGroup
 	if cfg.Kafka.Enabled {
-		consumers := map[string]messaging.ConsumerHandler{
-			"users":     messaging.NewUserConsumer(log).Consume,
-			"contacts":  messaging.NewContactConsumer(log).Consume,
-			"addresses": messaging.NewAddressConsumer(log).Consume,
-		}
-		for topic, handler := range consumers {
+		handler := messaging.NewLoggingHandler(log)
+		for _, topic := range []string{"users", "contacts", "addresses"} {
 			group, err := config.NewKafkaConsumerGroup(cfg)
 			if err != nil {
 				return err

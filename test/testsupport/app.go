@@ -80,7 +80,8 @@ func Reset(t testing.TB, db *gorm.DB) {
 
 // Do mengirim request ke aplikasi. body di-encode sebagai JSON bila tidak
 // nil; token (bila tidak kosong) dikirim di header Authorization.
-// Mengembalikan respons dan body mentahnya.
+// Mengembalikan respons dan body mentahnya. Body respons sudah dibaca dan
+// ditutup di sini, jadi pemanggil tidak perlu menutupnya lagi.
 func (a *TestApp) Do(t testing.TB, method, path string, body any, token string) (*http.Response, []byte) {
 	t.Helper()
 	var reader io.Reader
@@ -99,6 +100,7 @@ func (a *TestApp) Do(t testing.TB, method, path string, body any, token string) 
 	}
 	resp, err := a.App.Test(req)
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	raw, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	return resp, raw

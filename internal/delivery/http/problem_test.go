@@ -21,6 +21,7 @@ func doProblem(t *testing.T, handlerErr error) (int, string, map[string]any, str
 
 	resp, err := app.Test(httptest.NewRequest("GET", "/x", nil))
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
 	var body map[string]any
 	require.NoError(t, json.Unmarshal(raw, &body))

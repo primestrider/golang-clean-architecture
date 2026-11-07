@@ -14,7 +14,7 @@ import (
 // DevJWTSecret adalah secret JWT bawaan untuk pengembangan lokal. Nilai ini
 // sengaja ada di config.json supaya aplikasi bisa langsung jalan, dan
 // sengaja ditolak oleh Validate ketika app.env = production.
-const DevJWTSecret = "dev-only-insecure-secret-change-me-32bytes"
+const DevJWTSecret = "dev-only-insecure-secret-change-me-32bytes" //nolint:gosec // nilai dev yang disengaja, ditolak di production
 
 // Config adalah seluruh konfigurasi aplikasi dalam bentuk struct bertipe.
 //

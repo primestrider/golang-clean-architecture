@@ -1,5 +1,6 @@
 package model
 
+// AddressEvent adalah payload event perubahan alamat.
 type AddressEvent struct {
 	ID         string `json:"id"`
 	ContactID  string `json:"contact_id"`
@@ -12,6 +13,7 @@ type AddressEvent struct {
 	UpdatedAt  int64  `json:"updated_at"`
 }
 
-func (a *AddressEvent) GetId() string {
+// GetID mengembalikan id entity sebagai key event.
+func (a *AddressEvent) GetID() string {
 	return a.ID
 }

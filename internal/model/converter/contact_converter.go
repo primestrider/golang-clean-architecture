@@ -5,6 +5,7 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/model"
 )
 
+// ContactToResponse mengubah entity kontak menjadi respons API.
 func ContactToResponse(contact *entity.Contact) *model.ContactResponse {
 	return &model.ContactResponse{
 		ID:        contact.ID,
@@ -17,6 +18,7 @@ func ContactToResponse(contact *entity.Contact) *model.ContactResponse {
 	}
 }
 
+// ContactToEvent membuat payload event dari entity kontak.
 func ContactToEvent(contact *entity.Contact) *model.ContactEvent {
 	return &model.ContactEvent{
 		ID:        contact.ID,
