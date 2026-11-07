@@ -50,7 +50,7 @@ func TestTracing_RedactsSearchFiltersFromQuery(t *testing.T) {
 	var all string
 	for _, span := range recorder.Ended() {
 		for _, attr := range span.Attributes() {
-			all += string(attr.Key) + "=" + attr.Value.Emit() + " "
+			all += string(attr.Key) + "=" + attr.Value.String() + " "
 		}
 	}
 	assert.Contains(t, all, "url.query=")
