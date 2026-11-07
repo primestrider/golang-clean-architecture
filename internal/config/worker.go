@@ -16,6 +16,7 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/outbox"
 	"github.com/primestrider/golang-clean-architecture/internal/repository"
 	"github.com/primestrider/golang-clean-architecture/internal/scheduler"
+	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
@@ -57,7 +58,9 @@ func BootstrapWorker(deps *WorkerDeps) (*Worker, error) {
 
 	registry := messaging.NewRegistry(repository.NewTransactor(deps.DB),
 		repository.NewProcessedEventRepository(deps.DB), deps.Log)
-	registerHandlers(registry, deps)
+	if err := registerHandlers(registry, deps); err != nil {
+		return nil, err
+	}
 
 	outboxRepo := repository.NewOutboxRepository(deps.DB)
 	registerOutboxGauges(deps.Metrics, outboxRepo)
@@ -102,8 +105,16 @@ func BootstrapWorker(deps *WorkerDeps) (*Worker, error) {
 // registerHandlers mendaftarkan semua handler event. Tambahkan handler baru
 // di sini: nama consumer harus unik dan tidak boleh diganti setelah dipakai,
 // karena menjadi kunci idempotency.
-func registerHandlers(registry *messaging.Registry, deps *WorkerDeps) {
+func registerHandlers(registry *messaging.Registry, deps *WorkerDeps) error {
 	registry.Register("event-logger", messaging.AnyEvent, messaging.NewLoggingHandler(deps.Log))
+
+	mailer, err := NewMailer(deps.Config, deps.Log)
+	if err != nil {
+		return err
+	}
+	notifications := usecase.NewNotificationUseCase(deps.Log, mailer)
+	registry.Register("welcome-email", "user.registered", notifications.SendWelcome)
+	return nil
 }
 
 // Run menjalankan semua pekerjaan dan memblokir sampai semuanya berhenti

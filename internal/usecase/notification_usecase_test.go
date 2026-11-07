@@ -1,0 +1,47 @@
+package usecase_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/primestrider/golang-clean-architecture/internal/model"
+	"github.com/primestrider/golang-clean-architecture/internal/usecase"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// fakeMailer mencatat email yang dikirim.
+type fakeMailer struct{ sent []model.EmailMessage }
+
+func (m *fakeMailer) Send(_ context.Context, msg model.EmailMessage) error {
+	m.sent = append(m.sent, msg)
+	return nil
+}
+
+func registeredEvent(t *testing.T, name string) model.Event {
+	e, err := model.NewEvent("user.registered", "u1", "", model.UserResponse{ID: "u1", Email: "eko@example.com", Name: name})
+	require.NoError(t, err)
+	return e
+}
+
+func TestSendWelcome_SendsToRegisteredEmail(t *testing.T) {
+	mailer := &fakeMailer{}
+	uc := usecase.NewNotificationUseCase(discardLogger(), mailer)
+
+	require.NoError(t, uc.SendWelcome(context.Background(), registeredEvent(t, "Eko")))
+
+	require.Len(t, mailer.sent, 1)
+	assert.Equal(t, "eko@example.com", mailer.sent[0].To)
+	assert.Contains(t, mailer.sent[0].HTMLBody, "Eko")
+	assert.Contains(t, mailer.sent[0].TextBody, "Eko")
+}
+
+func TestSendWelcome_EscapesName(t *testing.T) {
+	mailer := &fakeMailer{}
+	uc := usecase.NewNotificationUseCase(discardLogger(), mailer)
+
+	require.NoError(t, uc.SendWelcome(context.Background(), registeredEvent(t, "<script>alert(1)</script>")))
+
+	assert.NotContains(t, mailer.sent[0].HTMLBody, "<script>")
+	assert.Contains(t, mailer.sent[0].HTMLBody, "&lt;script&gt;")
+}

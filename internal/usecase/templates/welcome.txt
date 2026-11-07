@@ -1,0 +1,5 @@
+Halo, {{.Name}}!
+
+Terima kasih sudah mendaftar. Akun Anda dengan email {{.Email}} sudah aktif.
+
+Bila Anda tidak merasa mendaftar, abaikan email ini.

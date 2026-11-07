@@ -113,3 +113,8 @@ type ObjectStorage interface {
 	// kredensial, berlaku selama ttl.
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
 }
+
+// Mailer mengirim email.
+type Mailer interface {
+	Send(ctx context.Context, msg model.EmailMessage) error
+}
