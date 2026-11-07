@@ -69,7 +69,9 @@ func BootstrapWeb(deps *WebDeps) *WebComponents {
 	var limiterStorage fiber.Storage
 	if deps.Redis != nil {
 		contactCache = cache.NewRedisCache(deps.Redis)
-		limiterStorage = redisstorage.NewFromConnection(deps.Redis)
+		// Fail-open: bila Redis mati, limiter beralih ke memori lokal alih-alih
+		// membuat semua request gagal.
+		limiterStorage = middleware.NewFailOpenStorage(redisstorage.NewFromConnection(deps.Redis), deps.Log)
 	}
 
 	// Use case: logika bisnis.

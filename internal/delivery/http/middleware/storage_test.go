@@ -1,0 +1,50 @@
+package middleware
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/gofiber/fiber/v3"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// brokenStorage meniru Redis yang mati: semua operasi gagal.
+type brokenStorage struct{}
+
+var errDown = errors.New("redis: connection refused")
+
+func (brokenStorage) GetWithContext(context.Context, string) ([]byte, error) { return nil, errDown }
+func (brokenStorage) Get(string) ([]byte, error)                             { return nil, errDown }
+func (brokenStorage) SetWithContext(context.Context, string, []byte, time.Duration) error {
+	return errDown
+}
+func (brokenStorage) Set(string, []byte, time.Duration) error         { return errDown }
+func (brokenStorage) DeleteWithContext(context.Context, string) error { return errDown }
+func (brokenStorage) Delete(string) error                             { return errDown }
+func (brokenStorage) ResetWithContext(context.Context) error          { return errDown }
+func (brokenStorage) Reset() error                                    { return errDown }
+func (brokenStorage) Close() error                                    { return nil }
+
+// TestRateLimiter_FailsOpenWhenStorageIsDown: Redis yang mati tidak boleh
+// membuat seluruh API error. Limiter beralih ke memori lokal.
+func TestRateLimiter_FailsOpenWhenStorageIsDown(t *testing.T) {
+	storage := NewFailOpenStorage(brokenStorage{}, slog.New(slog.DiscardHandler))
+	app := fiber.New()
+	app.Use(NewRateLimiter(2, time.Minute, IPKey("t"), storage))
+	app.Get("/", func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) })
+
+	var codes []int
+	for range 3 {
+		resp, err := app.Test(httptest.NewRequest("GET", "/", nil))
+		require.NoError(t, err)
+		_ = resp.Body.Close()
+		codes = append(codes, resp.StatusCode)
+	}
+
+	assert.Equal(t, []int{200, 200, 429}, codes, "still serving and still limiting via the in-memory fallback")
+}
