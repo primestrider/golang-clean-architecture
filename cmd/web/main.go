@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -25,6 +26,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -74,7 +76,7 @@ func run() error {
 	}
 
 	app := config.NewFiber(cfg, log)
-	config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics, Redis: redisClient, Storage: storageOrNil(objectStorage)})
+	components := config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics, Redis: redisClient, Storage: storageOrNil(objectStorage)})
 
 	checks := map[string]admin.Check{"db": sqlDB.PingContext}
 	if objectStorage != nil {
@@ -91,13 +93,27 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	serverErr := make(chan error, 2)
+	serverErr := make(chan error, 3)
 	go func() { serverErr <- adminServer.Start() }()
 	go func() {
 		addr := fmt.Sprintf(":%d", cfg.Server.Port)
 		log.Info("http server listening", "addr", addr)
 		serverErr <- app.Listen(addr, fiber.ListenConfig{DisableStartupMessage: true})
 	}()
+
+	// Server gRPC opsional di port terpisah, memakai use case yang sama.
+	var grpcServer *grpc.Server
+	if cfg.GRPC.Enabled {
+		grpcServer = config.NewGRPCServer(cfg, log, components)
+		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.GRPC.Port))
+		if err != nil {
+			return err
+		}
+		go func() {
+			log.Info("grpc server listening", "addr", listener.Addr().String())
+			serverErr <- grpcServer.Serve(listener)
+		}()
+	}
 
 	var runErr error
 	select {
@@ -117,6 +133,10 @@ func run() error {
 
 	errs := []error{runErr}
 	errs = append(errs, app.ShutdownWithContext(shutdownCtx))
+	if grpcServer != nil {
+		// GracefulStop menunggu RPC yang sedang berjalan selesai.
+		grpcServer.GracefulStop()
+	}
 	errs = append(errs, adminServer.Shutdown(shutdownCtx))
 	if redisClient != nil {
 		errs = append(errs, redisClient.Close())

@@ -27,6 +27,8 @@ type TestApp struct {
 	DB      *gorm.DB
 	Cfg     *config.Config
 	Metrics *observability.Metrics
+	// Components berisi use case yang dipakai delivery lain (misalnya gRPC).
+	Components *config.WebComponents
 }
 
 // Option mengubah konfigurasi sebelum aplikasi dibuat, misalnya untuk
@@ -75,8 +77,8 @@ func NewWebApp(t testing.TB, opts ...Option) *TestApp {
 		require.NoError(t, err)
 	}
 	app := config.NewFiber(cfg, log)
-	config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics, Redis: redisClient, Storage: objectStorage})
-	return &TestApp{App: app, DB: db, Cfg: cfg, Metrics: metrics}
+	components := config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics, Redis: redisClient, Storage: objectStorage})
+	return &TestApp{App: app, DB: db, Cfg: cfg, Metrics: metrics, Components: components}
 }
 
 // Reset mengosongkan semua tabel aplikasi (kecuali tabel catatan migrasi).

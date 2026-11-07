@@ -2,7 +2,7 @@
 # Di Windows, jalankan lewat Git Bash atau WSL. Perintah aslinya juga
 # tercantum di README untuk pengguna PowerShell.
 
-.PHONY: help tools build run-web run-worker test test-integration lint vuln mocks create-admin migrate-up migrate-down migrate-create compose-up compose-full compose-down
+.PHONY: help tools proto build run-web run-worker test test-integration lint vuln mocks create-admin migrate-up migrate-down migrate-create compose-up compose-full compose-down
 
 help: ## Tampilkan daftar target
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -11,6 +11,13 @@ tools: ## Pasang tool pengembangan (golangci-lint, mockery, govulncheck)
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 	go install github.com/vektra/mockery/v3@v3.9.0
 	go install golang.org/x/vuln/cmd/govulncheck@latest
+	go install github.com/bufbuild/buf/cmd/buf@v1.75.0
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
+
+proto: ## Generate kode Go dari api/proto (butuh buf, protoc-gen-go, protoc-gen-go-grpc)
+	buf lint
+	buf generate
 
 build: ## Build semua binary ke folder bin/
 	go build -o bin/ ./cmd/...

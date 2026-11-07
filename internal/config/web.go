@@ -15,6 +15,7 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/gateway/cache"
 	"github.com/primestrider/golang-clean-architecture/internal/observability"
 	"github.com/primestrider/golang-clean-architecture/internal/repository"
+	"github.com/primestrider/golang-clean-architecture/internal/security"
 	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 	"github.com/primestrider/golang-clean-architecture/internal/validation"
 	"github.com/redis/go-redis/v9"
@@ -37,10 +38,18 @@ type WebDeps struct {
 	Storage usecase.ObjectStorage
 }
 
+// WebComponents adalah bagian aplikasi web yang juga dipakai delivery lain
+// (misalnya server gRPC), supaya keduanya memakai use case yang sama.
+type WebComponents struct {
+	Contacts *usecase.ContactUseCase
+	Tokens   *security.TokenIssuer
+	Metrics  *observability.Metrics
+}
+
 // BootstrapWeb merangkai seluruh aplikasi web: repository, use case,
 // controller, middleware, dan route. Urutannya mengikuti arah dependency,
 // dari layer paling dalam (repository) ke paling luar (route).
-func BootstrapWeb(deps *WebDeps) {
+func BootstrapWeb(deps *WebDeps) *WebComponents {
 	// Repository dan transactor: akses data.
 	tx := repository.NewTransactor(deps.DB)
 	userRepository := repository.NewUserRepository(deps.DB)
@@ -125,4 +134,5 @@ func BootstrapWeb(deps *WebDeps) {
 	if deps.Config.Docs.Enabled {
 		docs.Register(deps.App, api.OpenAPI)
 	}
+	return &WebComponents{Contacts: contactUseCase, Tokens: tokens, Metrics: deps.Metrics}
 }
