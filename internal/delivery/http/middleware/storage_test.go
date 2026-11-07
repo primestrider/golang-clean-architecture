@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/primestrider/golang-clean-architecture/internal/apperror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +35,14 @@ func (brokenStorage) Close() error                                    { return n
 // membuat seluruh API error. Limiter beralih ke memori lokal.
 func TestRateLimiter_FailsOpenWhenStorageIsDown(t *testing.T) {
 	storage := NewFailOpenStorage(brokenStorage{}, slog.New(slog.DiscardHandler))
-	app := fiber.New()
+	// Error handler minimal yang memetakan RATE_LIMITED ke 429, seperti
+	// error handler aplikasi.
+	app := fiber.New(fiber.Config{ErrorHandler: func(c fiber.Ctx, err error) error {
+		if appErr, ok := apperror.As(err); ok && appErr.Code == apperror.CodeRateLimited {
+			return c.SendStatus(fiber.StatusTooManyRequests)
+		}
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}})
 	app.Use(NewRateLimiter(2, time.Minute, IPKey("t"), storage))
 	app.Get("/", func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) })
 
