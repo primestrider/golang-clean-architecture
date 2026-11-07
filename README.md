@@ -9,6 +9,10 @@ Domain contohnya sederhana (user → kontak → alamat), tetapi dipakai untuk
 mendemokan semua aspek backend: autentikasi, otorisasi, transaksi, event,
 observability, testing, dan deployment.
 
+> **Baru belajar Go atau backend?** Mulai dari
+> [materi pembelajaran](docs/belajar/README.md): dasar bahasa Go sampai
+> membangun fitur backend lengkap, semuanya memakai kode di repo ini.
+
 ## Isi
 
 - [Arsitektur](#arsitektur)
@@ -294,3 +298,6 @@ Contoh: menambah entity "order".
 8. Tulis integration test di `test/`.
 9. Bila perlu reaksi asinkron, daftarkan handler event di `registerHandlers`
    (`internal/config/worker.go`).
+
+Tutorial langkah demi langkah dengan contoh lengkap ada di
+[docs/belajar/11-tutorial-fitur-baru.md](docs/belajar/11-tutorial-fitur-baru.md).
