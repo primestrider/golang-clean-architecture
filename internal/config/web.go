@@ -43,7 +43,7 @@ func BootstrapWeb(deps *WebDeps) {
 	// Use case: logika bisnis.
 	validate := validation.New()
 	userUseCase := usecase.NewUserUseCase(deps.Log, validate, tx, userRepository, refreshTokenRepository, events)
-	contactUseCase := usecase.NewContactUseCase(deps.Log, validate, tx, contactRepository, events)
+	contactUseCase := usecase.NewContactUseCase(deps.Log, validate, tx, contactRepository, addressRepository, events)
 	authUseCase := usecase.NewAuthUseCase(usecase.AuthDeps{
 		Log:        deps.Log,
 		Validate:   validate,

@@ -7,6 +7,7 @@ type ContactResponse struct {
 	LastName  string            `json:"last_name"`
 	Email     string            `json:"email"`
 	Phone     string            `json:"phone"`
+	Version   int               `json:"version"`
 	CreatedAt int64             `json:"created_at"`
 	UpdatedAt int64             `json:"updated_at"`
 	Addresses []AddressResponse `json:"addresses,omitempty"`
@@ -33,6 +34,8 @@ type UpdateContactRequest struct {
 	LastName  string `json:"last_name" validate:"max=100"`
 	Email     string `json:"email" validate:"omitempty,max=200,email"`
 	Phone     string `json:"phone" validate:"max=20"`
+	// Version adalah versi data yang terakhir dilihat client (optimistic locking).
+	Version int `json:"version" validate:"required,min=1"`
 }
 
 // SearchContactRequest adalah filter dan paging untuk daftar kontak.

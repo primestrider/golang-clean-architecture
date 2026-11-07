@@ -375,3 +375,66 @@ func (_c *UserRepository_Update_Call) RunAndReturn(run func(ctx context.Context,
 	_c.Call.Return(run)
 	return _c
 }
+
+// UpdateWithVersion provides a mock function for the type UserRepository
+func (_mock *UserRepository) UpdateWithVersion(ctx context.Context, user *entity.User, expectedVersion int) error {
+	ret := _mock.Called(ctx, user, expectedVersion)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateWithVersion")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *entity.User, int) error); ok {
+		r0 = returnFunc(ctx, user, expectedVersion)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// UserRepository_UpdateWithVersion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateWithVersion'
+type UserRepository_UpdateWithVersion_Call struct {
+	*mock.Call
+}
+
+// UpdateWithVersion is a helper method to define mock.On call
+//   - ctx context.Context
+//   - user *entity.User
+//   - expectedVersion int
+func (_e *UserRepository_Expecter) UpdateWithVersion(ctx any, user any, expectedVersion any) *UserRepository_UpdateWithVersion_Call {
+	return &UserRepository_UpdateWithVersion_Call{Call: _e.mock.On("UpdateWithVersion", ctx, user, expectedVersion)}
+}
+
+func (_c *UserRepository_UpdateWithVersion_Call) Run(run func(ctx context.Context, user *entity.User, expectedVersion int)) *UserRepository_UpdateWithVersion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *entity.User
+		if args[1] != nil {
+			arg1 = args[1].(*entity.User)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *UserRepository_UpdateWithVersion_Call) Return(err error) *UserRepository_UpdateWithVersion_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *UserRepository_UpdateWithVersion_Call) RunAndReturn(run func(ctx context.Context, user *entity.User, expectedVersion int) error) *UserRepository_UpdateWithVersion_Call {
+	_c.Call.Return(run)
+	return _c
+}

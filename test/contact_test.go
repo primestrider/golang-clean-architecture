@@ -68,7 +68,7 @@ func TestUpdateContact_Success(t *testing.T) {
 	contact := app.CreateContact(t, userID, "Budi")
 
 	resp, raw := app.Do(t, http.MethodPut, "/api/v1/contacts/"+contact.ID,
-		model.UpdateContactRequest{FirstName: "Budi Baru"}, token)
+		model.UpdateContactRequest{FirstName: "Budi Baru", Version: 1}, token)
 
 	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
 	assert.Equal(t, "Budi Baru", testsupport.DecodeData[model.ContactResponse](t, raw).FirstName)

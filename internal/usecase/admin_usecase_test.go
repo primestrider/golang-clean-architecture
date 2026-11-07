@@ -23,7 +23,7 @@ func newAdminUseCase(t *testing.T) (*usecase.AdminUseCase, *mocks.UserRepository
 func TestChangeRole_CannotDemoteSelf(t *testing.T) {
 	uc, _, _ := newAdminUseCase(t)
 
-	_, err := uc.ChangeRole(context.Background(), &model.ChangeRoleRequest{ActorID: "admin-1", UserID: "admin-1", Role: "user"})
+	_, err := uc.ChangeRole(context.Background(), &model.ChangeRoleRequest{ActorID: "admin-1", UserID: "admin-1", Role: "user", Version: 1})
 
 	assert.Equal(t, apperror.CodeConflict, codeOf(err))
 }
@@ -31,7 +31,7 @@ func TestChangeRole_CannotDemoteSelf(t *testing.T) {
 func TestChangeRole_InvalidRole(t *testing.T) {
 	uc, _, _ := newAdminUseCase(t)
 
-	_, err := uc.ChangeRole(context.Background(), &model.ChangeRoleRequest{ActorID: "admin-1", UserID: "u2", Role: "superuser"})
+	_, err := uc.ChangeRole(context.Background(), &model.ChangeRoleRequest{ActorID: "admin-1", UserID: "u2", Role: "superuser", Version: 1})
 
 	assert.Equal(t, []string{"role"}, fieldsOf(err))
 }
@@ -39,10 +39,10 @@ func TestChangeRole_InvalidRole(t *testing.T) {
 func TestChangeRole_PromotesUser(t *testing.T) {
 	uc, users, events := newAdminUseCase(t)
 	users.EXPECT().FindByID(mock.Anything, "u2").Return(&entity.User{ID: "u2", Role: entity.RoleUser}, nil)
-	users.EXPECT().Update(mock.Anything, mock.MatchedBy(func(u *entity.User) bool { return u.Role == entity.RoleAdmin })).Return(nil)
+	users.EXPECT().UpdateWithVersion(mock.Anything, mock.MatchedBy(func(u *entity.User) bool { return u.Role == entity.RoleAdmin }), 1).Return(nil)
 	events.EXPECT().Publish(mock.Anything, mock.Anything).Return(nil)
 
-	res, err := uc.ChangeRole(context.Background(), &model.ChangeRoleRequest{ActorID: "admin-1", UserID: "u2", Role: "admin"})
+	res, err := uc.ChangeRole(context.Background(), &model.ChangeRoleRequest{ActorID: "admin-1", UserID: "u2", Role: "admin", Version: 1})
 
 	require.NoError(t, err)
 	assert.Equal(t, "admin", res.Role)

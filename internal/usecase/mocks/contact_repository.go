@@ -309,36 +309,37 @@ func (_c *ContactRepository_Search_Call) RunAndReturn(run func(ctx context.Conte
 	return _c
 }
 
-// Update provides a mock function for the type ContactRepository
-func (_mock *ContactRepository) Update(ctx context.Context, contact *entity.Contact) error {
-	ret := _mock.Called(ctx, contact)
+// UpdateWithVersion provides a mock function for the type ContactRepository
+func (_mock *ContactRepository) UpdateWithVersion(ctx context.Context, contact *entity.Contact, expectedVersion int) error {
+	ret := _mock.Called(ctx, contact, expectedVersion)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Update")
+		panic("no return value specified for UpdateWithVersion")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *entity.Contact) error); ok {
-		r0 = returnFunc(ctx, contact)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *entity.Contact, int) error); ok {
+		r0 = returnFunc(ctx, contact, expectedVersion)
 	} else {
 		r0 = ret.Error(0)
 	}
 	return r0
 }
 
-// ContactRepository_Update_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Update'
-type ContactRepository_Update_Call struct {
+// ContactRepository_UpdateWithVersion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateWithVersion'
+type ContactRepository_UpdateWithVersion_Call struct {
 	*mock.Call
 }
 
-// Update is a helper method to define mock.On call
+// UpdateWithVersion is a helper method to define mock.On call
 //   - ctx context.Context
 //   - contact *entity.Contact
-func (_e *ContactRepository_Expecter) Update(ctx any, contact any) *ContactRepository_Update_Call {
-	return &ContactRepository_Update_Call{Call: _e.mock.On("Update", ctx, contact)}
+//   - expectedVersion int
+func (_e *ContactRepository_Expecter) UpdateWithVersion(ctx any, contact any, expectedVersion any) *ContactRepository_UpdateWithVersion_Call {
+	return &ContactRepository_UpdateWithVersion_Call{Call: _e.mock.On("UpdateWithVersion", ctx, contact, expectedVersion)}
 }
 
-func (_c *ContactRepository_Update_Call) Run(run func(ctx context.Context, contact *entity.Contact)) *ContactRepository_Update_Call {
+func (_c *ContactRepository_UpdateWithVersion_Call) Run(run func(ctx context.Context, contact *entity.Contact, expectedVersion int)) *ContactRepository_UpdateWithVersion_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -348,20 +349,25 @@ func (_c *ContactRepository_Update_Call) Run(run func(ctx context.Context, conta
 		if args[1] != nil {
 			arg1 = args[1].(*entity.Contact)
 		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
 }
 
-func (_c *ContactRepository_Update_Call) Return(err error) *ContactRepository_Update_Call {
+func (_c *ContactRepository_UpdateWithVersion_Call) Return(err error) *ContactRepository_UpdateWithVersion_Call {
 	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *ContactRepository_Update_Call) RunAndReturn(run func(ctx context.Context, contact *entity.Contact) error) *ContactRepository_Update_Call {
+func (_c *ContactRepository_UpdateWithVersion_Call) RunAndReturn(run func(ctx context.Context, contact *entity.Contact, expectedVersion int) error) *ContactRepository_UpdateWithVersion_Call {
 	_c.Call.Return(run)
 	return _c
 }

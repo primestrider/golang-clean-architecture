@@ -35,3 +35,12 @@ type User struct {
 func (u *User) TableName() string {
 	return "users"
 }
+
+// GetID mengembalikan primary key.
+func (u *User) GetID() string { return u.ID }
+
+// GetVersion mengembalikan versi data untuk optimistic locking.
+func (u *User) GetVersion() int { return u.Version }
+
+// SetVersion mengubah versi data.
+func (u *User) SetVersion(v int) { u.Version = v }

@@ -46,7 +46,7 @@ func TestAdminChangeRole(t *testing.T) {
 	user := app.CreateUser(t, "eko@example.com", "rahasia123")
 
 	resp, raw := app.Do(t, http.MethodPatch, "/api/v1/admin/users/"+user.ID+"/role",
-		model.ChangeRoleRequest{Role: "admin"}, app.TokenFor(t, admin))
+		model.ChangeRoleRequest{Role: "admin", Version: 1}, app.TokenFor(t, admin))
 
 	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
 	assert.Equal(t, "admin", testsupport.DecodeData[model.UserResponse](t, raw).Role)

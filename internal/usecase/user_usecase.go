@@ -117,7 +117,7 @@ func (c *UserUseCase) Update(ctx context.Context, req *model.UpdateUserRequest) 
 			passwordChanged = true
 		}
 
-		if err := c.users.Update(ctx, user); err != nil {
+		if err := c.users.UpdateWithVersion(ctx, user, req.Version); err != nil {
 			return err
 		}
 		if passwordChanged {

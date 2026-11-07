@@ -33,6 +33,8 @@ type UpdateUserRequest struct {
 	Name            string `json:"name" validate:"omitempty,max=100"`
 	CurrentPassword string `json:"current_password" validate:"omitempty,max=72"`
 	NewPassword     string `json:"new_password" validate:"omitempty,min=8,max=72"`
+	// Version adalah versi data yang terakhir dilihat client (optimistic locking).
+	Version int `json:"version" validate:"required,min=1"`
 }
 
 // GetUserRequest mengidentifikasi user yang profilnya diambil.

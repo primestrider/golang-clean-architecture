@@ -30,3 +30,8 @@ func (r *AddressRepository) FindAllByContactID(ctx context.Context, contactID st
 	}
 	return addresses, nil
 }
+
+// DeleteAllByContactID men-soft-delete semua alamat milik sebuah kontak.
+func (r *AddressRepository) DeleteAllByContactID(ctx context.Context, contactID string) error {
+	return r.db(ctx).Where("contact_id = ?", contactID).Delete(&entity.Address{}).Error
+}

@@ -34,6 +34,9 @@ type UserRepository interface {
 	// apperror CONFLICT.
 	Create(ctx context.Context, user *entity.User) error
 	Update(ctx context.Context, user *entity.User) error
+	// UpdateWithVersion menyimpan perubahan hanya bila versi di database
+	// masih expectedVersion (optimistic locking); jika tidak, CONFLICT.
+	UpdateWithVersion(ctx context.Context, user *entity.User, expectedVersion int) error
 	FindByID(ctx context.Context, id string) (*entity.User, error)
 	FindByEmail(ctx context.Context, email string) (*entity.User, error)
 	List(ctx context.Context, page, size int) ([]entity.User, int64, error)
@@ -66,7 +69,7 @@ type TokenIssuer interface {
 // ContactRepository adalah akses data kontak yang dibutuhkan use case.
 type ContactRepository interface {
 	Create(ctx context.Context, contact *entity.Contact) error
-	Update(ctx context.Context, contact *entity.Contact) error
+	UpdateWithVersion(ctx context.Context, contact *entity.Contact, expectedVersion int) error
 	Delete(ctx context.Context, contact *entity.Contact) error
 	FindByIDAndUserID(ctx context.Context, id, userID string) (*entity.Contact, error)
 	Search(ctx context.Context, req *model.SearchContactRequest) ([]entity.Contact, int64, error)
@@ -75,8 +78,10 @@ type ContactRepository interface {
 // AddressRepository adalah akses data alamat yang dibutuhkan use case.
 type AddressRepository interface {
 	Create(ctx context.Context, address *entity.Address) error
-	Update(ctx context.Context, address *entity.Address) error
+	UpdateWithVersion(ctx context.Context, address *entity.Address, expectedVersion int) error
 	Delete(ctx context.Context, address *entity.Address) error
+	// DeleteAllByContactID men-soft-delete semua alamat milik sebuah kontak.
+	DeleteAllByContactID(ctx context.Context, contactID string) error
 	FindByIDAndContactID(ctx context.Context, id, contactID string) (*entity.Address, error)
 	FindAllByContactID(ctx context.Context, contactID string) ([]entity.Address, error)
 }

@@ -14,6 +14,7 @@ func AddressToResponse(address *entity.Address) *model.AddressResponse {
 		Province:   address.Province,
 		PostalCode: address.PostalCode,
 		Country:    address.Country,
+		Version:    address.Version,
 		CreatedAt:  address.CreatedAt,
 		UpdatedAt:  address.UpdatedAt,
 	}

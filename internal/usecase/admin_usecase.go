@@ -65,7 +65,7 @@ func (c *AdminUseCase) ChangeRole(ctx context.Context, req *model.ChangeRoleRequ
 			return err
 		}
 		user.Role = req.Role
-		if err := c.users.Update(ctx, user); err != nil {
+		if err := c.users.UpdateWithVersion(ctx, user, req.Version); err != nil {
 			return err
 		}
 		return c.events.Publish(ctx, converter.UserToEvent(user))

@@ -160,6 +160,63 @@ func (_c *AddressRepository_Delete_Call) RunAndReturn(run func(ctx context.Conte
 	return _c
 }
 
+// DeleteAllByContactID provides a mock function for the type AddressRepository
+func (_mock *AddressRepository) DeleteAllByContactID(ctx context.Context, contactID string) error {
+	ret := _mock.Called(ctx, contactID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteAllByContactID")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = returnFunc(ctx, contactID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// AddressRepository_DeleteAllByContactID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteAllByContactID'
+type AddressRepository_DeleteAllByContactID_Call struct {
+	*mock.Call
+}
+
+// DeleteAllByContactID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - contactID string
+func (_e *AddressRepository_Expecter) DeleteAllByContactID(ctx any, contactID any) *AddressRepository_DeleteAllByContactID_Call {
+	return &AddressRepository_DeleteAllByContactID_Call{Call: _e.mock.On("DeleteAllByContactID", ctx, contactID)}
+}
+
+func (_c *AddressRepository_DeleteAllByContactID_Call) Run(run func(ctx context.Context, contactID string)) *AddressRepository_DeleteAllByContactID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *AddressRepository_DeleteAllByContactID_Call) Return(err error) *AddressRepository_DeleteAllByContactID_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *AddressRepository_DeleteAllByContactID_Call) RunAndReturn(run func(ctx context.Context, contactID string) error) *AddressRepository_DeleteAllByContactID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // FindAllByContactID provides a mock function for the type AddressRepository
 func (_mock *AddressRepository) FindAllByContactID(ctx context.Context, contactID string) ([]entity.Address, error) {
 	ret := _mock.Called(ctx, contactID)
@@ -302,36 +359,37 @@ func (_c *AddressRepository_FindByIDAndContactID_Call) RunAndReturn(run func(ctx
 	return _c
 }
 
-// Update provides a mock function for the type AddressRepository
-func (_mock *AddressRepository) Update(ctx context.Context, address *entity.Address) error {
-	ret := _mock.Called(ctx, address)
+// UpdateWithVersion provides a mock function for the type AddressRepository
+func (_mock *AddressRepository) UpdateWithVersion(ctx context.Context, address *entity.Address, expectedVersion int) error {
+	ret := _mock.Called(ctx, address, expectedVersion)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Update")
+		panic("no return value specified for UpdateWithVersion")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *entity.Address) error); ok {
-		r0 = returnFunc(ctx, address)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *entity.Address, int) error); ok {
+		r0 = returnFunc(ctx, address, expectedVersion)
 	} else {
 		r0 = ret.Error(0)
 	}
 	return r0
 }
 
-// AddressRepository_Update_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Update'
-type AddressRepository_Update_Call struct {
+// AddressRepository_UpdateWithVersion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateWithVersion'
+type AddressRepository_UpdateWithVersion_Call struct {
 	*mock.Call
 }
 
-// Update is a helper method to define mock.On call
+// UpdateWithVersion is a helper method to define mock.On call
 //   - ctx context.Context
 //   - address *entity.Address
-func (_e *AddressRepository_Expecter) Update(ctx any, address any) *AddressRepository_Update_Call {
-	return &AddressRepository_Update_Call{Call: _e.mock.On("Update", ctx, address)}
+//   - expectedVersion int
+func (_e *AddressRepository_Expecter) UpdateWithVersion(ctx any, address any, expectedVersion any) *AddressRepository_UpdateWithVersion_Call {
+	return &AddressRepository_UpdateWithVersion_Call{Call: _e.mock.On("UpdateWithVersion", ctx, address, expectedVersion)}
 }
 
-func (_c *AddressRepository_Update_Call) Run(run func(ctx context.Context, address *entity.Address)) *AddressRepository_Update_Call {
+func (_c *AddressRepository_UpdateWithVersion_Call) Run(run func(ctx context.Context, address *entity.Address, expectedVersion int)) *AddressRepository_UpdateWithVersion_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -341,20 +399,25 @@ func (_c *AddressRepository_Update_Call) Run(run func(ctx context.Context, addre
 		if args[1] != nil {
 			arg1 = args[1].(*entity.Address)
 		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
 }
 
-func (_c *AddressRepository_Update_Call) Return(err error) *AddressRepository_Update_Call {
+func (_c *AddressRepository_UpdateWithVersion_Call) Return(err error) *AddressRepository_UpdateWithVersion_Call {
 	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *AddressRepository_Update_Call) RunAndReturn(run func(ctx context.Context, address *entity.Address) error) *AddressRepository_Update_Call {
+func (_c *AddressRepository_UpdateWithVersion_Call) RunAndReturn(run func(ctx context.Context, address *entity.Address, expectedVersion int) error) *AddressRepository_UpdateWithVersion_Call {
 	_c.Call.Return(run)
 	return _c
 }

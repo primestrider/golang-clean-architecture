@@ -13,17 +13,18 @@ import (
 
 // ContactUseCase berisi aturan bisnis untuk kontak milik user.
 type ContactUseCase struct {
-	log      *slog.Logger
-	validate *validation.Validator
-	tx       Transactor
-	contacts ContactRepository
-	events   EventPublisher
+	log       *slog.Logger
+	validate  *validation.Validator
+	tx        Transactor
+	contacts  ContactRepository
+	addresses AddressRepository
+	events    EventPublisher
 }
 
 // NewContactUseCase membuat ContactUseCase dengan dependency-nya.
 func NewContactUseCase(log *slog.Logger, validate *validation.Validator, tx Transactor,
-	contacts ContactRepository, events EventPublisher) *ContactUseCase {
-	return &ContactUseCase{log: log, validate: validate, tx: tx, contacts: contacts, events: events}
+	contacts ContactRepository, addresses AddressRepository, events EventPublisher) *ContactUseCase {
+	return &ContactUseCase{log: log, validate: validate, tx: tx, contacts: contacts, addresses: addresses, events: events}
 }
 
 // Create membuat kontak baru untuk user yang login. Penyimpanan kontak dan
@@ -72,7 +73,7 @@ func (c *ContactUseCase) Update(ctx context.Context, req *model.UpdateContactReq
 		contact.LastName = req.LastName
 		contact.Email = req.Email
 		contact.Phone = req.Phone
-		if err := c.contacts.Update(ctx, contact); err != nil {
+		if err := c.contacts.UpdateWithVersion(ctx, contact, req.Version); err != nil {
 			return err
 		}
 		return c.events.Publish(ctx, converter.ContactToEvent(contact))
@@ -96,7 +97,8 @@ func (c *ContactUseCase) Get(ctx context.Context, req *model.GetContactRequest) 
 	return converter.ContactToResponse(contact), nil
 }
 
-// Delete menghapus kontak milik user yang login.
+// Delete men-soft-delete kontak milik user yang login beserta semua
+// alamatnya, dalam satu transaksi.
 func (c *ContactUseCase) Delete(ctx context.Context, req *model.DeleteContactRequest) error {
 	if err := c.validate.Struct(req); err != nil {
 		return err
@@ -104,6 +106,9 @@ func (c *ContactUseCase) Delete(ctx context.Context, req *model.DeleteContactReq
 	return c.tx.WithinTransaction(ctx, func(ctx context.Context) error {
 		contact, err := c.contacts.FindByIDAndUserID(ctx, req.ID, req.UserID)
 		if err != nil {
+			return err
+		}
+		if err := c.addresses.DeleteAllByContactID(ctx, contact.ID); err != nil {
 			return err
 		}
 		return c.contacts.Delete(ctx, contact)

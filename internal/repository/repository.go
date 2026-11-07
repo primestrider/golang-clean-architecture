@@ -39,6 +39,51 @@ func (r *Repository[T]) Delete(ctx context.Context, entity *T) error {
 	return r.db(ctx).Delete(entity).Error
 }
 
+// versioned adalah entity yang mendukung optimistic locking.
+type versioned interface {
+	GetID() string
+	GetVersion() int
+	SetVersion(v int)
+}
+
+// UpdateWithVersion menyimpan perubahan entity hanya bila versinya di
+// database masih expectedVersion, lalu menaikkan versinya.
+//
+// Ini adalah optimistic locking: dua orang yang mengedit data yang sama
+// berdasarkan versi yang sama tidak akan saling menimpa diam-diam. Yang kedua
+// mendapat CONFLICT dan harus memuat ulang data terbaru. Bila data sudah
+// tidak ada (termasuk sudah di-soft-delete), hasilnya NOT_FOUND.
+//
+// Query yang dihasilkan kurang lebih:
+//
+//	UPDATE ... SET ..., version = expected+1 WHERE id = ? AND version = expected AND deleted_at = 0
+func (r *Repository[T]) UpdateWithVersion(ctx context.Context, entity *T, expectedVersion int) error {
+	v, ok := any(entity).(versioned)
+	if !ok {
+		return apperror.Internal(errors.New(r.Name + " does not support versioning"))
+	}
+	v.SetVersion(expectedVersion + 1)
+	res := r.db(ctx).Model(entity).Where("version = ?", expectedVersion).Select("*").Updates(entity)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 1 {
+		return nil
+	}
+
+	// Tidak ada baris yang berubah: bedakan "data sudah tidak ada" dengan
+	// "versinya sudah berubah".
+	v.SetVersion(expectedVersion)
+	var count int64
+	if err := r.db(ctx).Model(new(T)).Where("id = ?", v.GetID()).Count(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		return apperror.NotFound(r.Name)
+	}
+	return apperror.Conflict(r.Name + " was modified by another request, reload and try again")
+}
+
 // FindByID mencari entity berdasarkan primary key. Mengembalikan
 // apperror NOT_FOUND bila tidak ada.
 func (r *Repository[T]) FindByID(ctx context.Context, id string) (*T, error) {

@@ -97,7 +97,7 @@ func TestUpdate_NewPasswordRequiresCurrent(t *testing.T) {
 	f := newUserFixture(t)
 	f.users.EXPECT().FindByID(mock.Anything, "u1").Return(existingUser(t, "rahasia123"), nil)
 
-	_, err := f.uc.Update(context.Background(), &model.UpdateUserRequest{ID: "u1", NewPassword: "passwordbaru"})
+	_, err := f.uc.Update(context.Background(), &model.UpdateUserRequest{ID: "u1", NewPassword: "passwordbaru", Version: 1})
 
 	assert.Equal(t, apperror.CodeValidation, codeOf(err))
 	assert.Equal(t, []string{"current_password"}, fieldsOf(err))
@@ -107,7 +107,7 @@ func TestUpdate_WrongCurrentPasswordRejected(t *testing.T) {
 	f := newUserFixture(t)
 	f.users.EXPECT().FindByID(mock.Anything, "u1").Return(existingUser(t, "rahasia123"), nil)
 
-	_, err := f.uc.Update(context.Background(), &model.UpdateUserRequest{ID: "u1", CurrentPassword: "salah", NewPassword: "passwordbaru"})
+	_, err := f.uc.Update(context.Background(), &model.UpdateUserRequest{ID: "u1", CurrentPassword: "salah", NewPassword: "passwordbaru", Version: 1})
 
 	assert.Equal(t, []string{"current_password"}, fieldsOf(err))
 }
@@ -115,13 +115,13 @@ func TestUpdate_WrongCurrentPasswordRejected(t *testing.T) {
 func TestUpdate_PasswordChangeRevokesAllRefreshTokens(t *testing.T) {
 	f := newUserFixture(t)
 	f.users.EXPECT().FindByID(mock.Anything, "u1").Return(existingUser(t, "rahasia123"), nil)
-	f.users.EXPECT().Update(mock.Anything, mock.MatchedBy(func(u *entity.User) bool {
+	f.users.EXPECT().UpdateWithVersion(mock.Anything, mock.MatchedBy(func(u *entity.User) bool {
 		return security.ComparePassword(u.Password, "passwordbaru")
-	})).Return(nil)
+	}), 1).Return(nil)
 	f.tokens.EXPECT().RevokeAllForUser(mock.Anything, "u1").Return(nil).Once()
 	f.events.EXPECT().Publish(mock.Anything, mock.Anything).Return(nil)
 
-	_, err := f.uc.Update(context.Background(), &model.UpdateUserRequest{ID: "u1", CurrentPassword: "rahasia123", NewPassword: "passwordbaru"})
+	_, err := f.uc.Update(context.Background(), &model.UpdateUserRequest{ID: "u1", CurrentPassword: "rahasia123", NewPassword: "passwordbaru", Version: 1})
 
 	require.NoError(t, err)
 }
@@ -129,10 +129,10 @@ func TestUpdate_PasswordChangeRevokesAllRefreshTokens(t *testing.T) {
 func TestUpdate_NameOnlyDoesNotRevokeTokens(t *testing.T) {
 	f := newUserFixture(t)
 	f.users.EXPECT().FindByID(mock.Anything, "u1").Return(existingUser(t, "rahasia123"), nil)
-	f.users.EXPECT().Update(mock.Anything, mock.Anything).Return(nil)
+	f.users.EXPECT().UpdateWithVersion(mock.Anything, mock.Anything, 1).Return(nil)
 	f.events.EXPECT().Publish(mock.Anything, mock.Anything).Return(nil)
 
-	res, err := f.uc.Update(context.Background(), &model.UpdateUserRequest{ID: "u1", Name: "Eko Baru"})
+	res, err := f.uc.Update(context.Background(), &model.UpdateUserRequest{ID: "u1", Name: "Eko Baru", Version: 1})
 
 	require.NoError(t, err)
 	assert.Equal(t, "Eko Baru", res.Name)

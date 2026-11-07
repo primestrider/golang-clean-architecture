@@ -13,6 +13,7 @@ func ContactToResponse(contact *entity.Contact) *model.ContactResponse {
 		LastName:  contact.LastName,
 		Email:     contact.Email,
 		Phone:     contact.Phone,
+		Version:   contact.Version,
 		CreatedAt: contact.CreatedAt,
 		UpdatedAt: contact.UpdatedAt,
 	}

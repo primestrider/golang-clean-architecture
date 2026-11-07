@@ -83,7 +83,7 @@ func (c *AddressUseCase) Update(ctx context.Context, req *model.UpdateAddressReq
 		address.Province = req.Province
 		address.PostalCode = req.PostalCode
 		address.Country = req.Country
-		if err := c.addresses.Update(ctx, address); err != nil {
+		if err := c.addresses.UpdateWithVersion(ctx, address, req.Version); err != nil {
 			return err
 		}
 		return c.events.Publish(ctx, converter.AddressToEvent(address))

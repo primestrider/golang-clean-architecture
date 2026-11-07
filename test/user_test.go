@@ -75,7 +75,7 @@ func TestUpdateUser_ChangesName(t *testing.T) {
 	app := testsupport.NewWebApp(t)
 	user := app.CreateUser(t, "eko@example.com", "rahasia123")
 
-	resp, raw := app.Do(t, http.MethodPatch, "/api/v1/users/_current", model.UpdateUserRequest{Name: "Eko Baru"}, app.TokenFor(t, user))
+	resp, raw := app.Do(t, http.MethodPatch, "/api/v1/users/_current", model.UpdateUserRequest{Name: "Eko Baru", Version: 1}, app.TokenFor(t, user))
 
 	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
 	assert.Equal(t, "Eko Baru", testsupport.DecodeData[model.UserResponse](t, raw).Name)
@@ -86,7 +86,7 @@ func TestUpdateUser_ChangesPasswordWithCurrentPassword(t *testing.T) {
 	user := app.CreateUser(t, "eko@example.com", "rahasia123")
 
 	resp, raw := app.Do(t, http.MethodPatch, "/api/v1/users/_current",
-		model.UpdateUserRequest{CurrentPassword: "rahasia123", NewPassword: "passwordbaru"}, app.TokenFor(t, user))
+		model.UpdateUserRequest{CurrentPassword: "rahasia123", NewPassword: "passwordbaru", Version: 1}, app.TokenFor(t, user))
 
 	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
 	stored := new(entity.User)

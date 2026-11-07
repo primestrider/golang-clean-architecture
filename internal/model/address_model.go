@@ -8,6 +8,7 @@ type AddressResponse struct {
 	Province   string `json:"province"`
 	PostalCode string `json:"postal_code"`
 	Country    string `json:"country"`
+	Version    int    `json:"version"`
 	CreatedAt  int64  `json:"created_at"`
 	UpdatedAt  int64  `json:"updated_at"`
 }
@@ -39,6 +40,8 @@ type UpdateAddressRequest struct {
 	Province   string `json:"province" validate:"max=255"`
 	PostalCode string `json:"postal_code" validate:"max=10"`
 	Country    string `json:"country" validate:"max=100"`
+	// Version adalah versi data yang terakhir dilihat client (optimistic locking).
+	Version int `json:"version" validate:"required,min=1"`
 }
 
 // GetAddressRequest mengidentifikasi satu alamat.

@@ -121,7 +121,7 @@ func TestPasswordChange_RevokesRefreshTokens(t *testing.T) {
 	tokens := login(t, app, "eko@example.com", "rahasia123")
 
 	resp, raw := app.Do(t, http.MethodPatch, "/api/v1/users/_current",
-		model.UpdateUserRequest{CurrentPassword: "rahasia123", NewPassword: "passwordbaru"}, tokens.AccessToken)
+		model.UpdateUserRequest{CurrentPassword: "rahasia123", NewPassword: "passwordbaru", Version: 1}, tokens.AccessToken)
 	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
 
 	status, _ := refresh(t, app, tokens.RefreshToken)

@@ -58,7 +58,7 @@ func TestGetUpdateDeleteAddress(t *testing.T) {
 	resp, raw := app.Do(t, http.MethodGet, path, nil, token)
 	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
 
-	resp, raw = app.Do(t, http.MethodPut, path, model.UpdateAddressRequest{City: "Surabaya"}, token)
+	resp, raw = app.Do(t, http.MethodPut, path, model.UpdateAddressRequest{City: "Surabaya", Version: 1}, token)
 	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
 	assert.Equal(t, "Surabaya", testsupport.DecodeData[model.AddressResponse](t, raw).City)
 
