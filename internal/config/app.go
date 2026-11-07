@@ -9,8 +9,8 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 
 	"github.com/IBM/sarama"
-	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
+	"github.com/primestrider/golang-clean-architecture/internal/validation"
 	"gorm.io/gorm"
 	"log/slog"
 )
@@ -19,7 +19,7 @@ type BootstrapConfig struct {
 	DB       *gorm.DB
 	App      *fiber.App
 	Log      *slog.Logger
-	Validate *validator.Validate
+	Validate *validation.Validator
 	Config   *Config
 	Producer sarama.SyncProducer
 }

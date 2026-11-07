@@ -8,9 +8,9 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/model/converter"
 	"github.com/primestrider/golang-clean-architecture/internal/repository"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
+	"github.com/primestrider/golang-clean-architecture/internal/validation"
 	"gorm.io/gorm"
 	"log/slog"
 )
@@ -18,12 +18,12 @@ import (
 type ContactUseCase struct {
 	DB                *gorm.DB
 	Log               *slog.Logger
-	Validate          *validator.Validate
+	Validate          *validation.Validator
 	ContactRepository *repository.ContactRepository
 	ContactProducer   *messaging.ContactProducer
 }
 
-func NewContactUseCase(db *gorm.DB, logger *slog.Logger, validate *validator.Validate,
+func NewContactUseCase(db *gorm.DB, logger *slog.Logger, validate *validation.Validator,
 	contactRepository *repository.ContactRepository, contactProducer *messaging.ContactProducer) *ContactUseCase {
 	return &ContactUseCase{
 		DB:                db,

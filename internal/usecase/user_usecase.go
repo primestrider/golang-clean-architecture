@@ -8,9 +8,9 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/model/converter"
 	"github.com/primestrider/golang-clean-architecture/internal/repository"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
+	"github.com/primestrider/golang-clean-architecture/internal/validation"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"log/slog"
@@ -19,12 +19,12 @@ import (
 type UserUseCase struct {
 	DB             *gorm.DB
 	Log            *slog.Logger
-	Validate       *validator.Validate
+	Validate       *validation.Validator
 	UserRepository *repository.UserRepository
 	UserProducer   *messaging.UserProducer
 }
 
-func NewUserUseCase(db *gorm.DB, logger *slog.Logger, validate *validator.Validate,
+func NewUserUseCase(db *gorm.DB, logger *slog.Logger, validate *validation.Validator,
 	userRepository *repository.UserRepository, userProducer *messaging.UserProducer) *UserUseCase {
 	return &UserUseCase{
 		DB:             db,

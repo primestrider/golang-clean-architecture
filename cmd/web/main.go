@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/primestrider/golang-clean-architecture/internal/config"
+	"github.com/primestrider/golang-clean-architecture/internal/validation"
 	"os"
 )
 
@@ -17,8 +18,8 @@ func main() {
 		log.Error("startup failed", "error", err)
 		os.Exit(1)
 	}
-	validate := config.NewValidator(viperConfig)
-	app := config.NewFiber(viperConfig)
+	validate := validation.New()
+	app := config.NewFiber(viperConfig, log)
 	producer, err := config.NewKafkaProducer(viperConfig, log)
 	if err != nil {
 		log.Error("startup failed", "error", err)

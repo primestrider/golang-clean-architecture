@@ -1,27 +1,19 @@
 package config
 
 import (
+	"log/slog"
+
 	"github.com/gofiber/fiber/v3"
+	deliveryhttp "github.com/primestrider/golang-clean-architecture/internal/delivery/http"
 )
 
-func NewFiber(config *Config) *fiber.App {
-	var app = fiber.New(fiber.Config{
-		AppName:      config.App.Name,
-		ErrorHandler: NewErrorHandler(),
+// NewFiber membuat aplikasi Fiber dengan error handler Problem Details,
+// sehingga setiap error (dari use case, middleware, atau Fiber sendiri)
+// dikirim ke client dalam satu format yang konsisten.
+func NewFiber(cfg *Config, log *slog.Logger) *fiber.App {
+	return fiber.New(fiber.Config{
+		AppName:      cfg.App.Name,
+		ErrorHandler: deliveryhttp.NewErrorHandler(log),
+		BodyLimit:    cfg.Server.BodyLimit,
 	})
-
-	return app
-}
-
-func NewErrorHandler() fiber.ErrorHandler {
-	return func(ctx fiber.Ctx, err error) error {
-		code := fiber.StatusInternalServerError
-		if e, ok := err.(*fiber.Error); ok {
-			code = e.Code
-		}
-
-		return ctx.Status(code).JSON(fiber.Map{
-			"errors": err.Error(),
-		})
-	}
 }

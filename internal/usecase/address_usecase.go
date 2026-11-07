@@ -8,9 +8,9 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/model/converter"
 	"github.com/primestrider/golang-clean-architecture/internal/repository"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
+	"github.com/primestrider/golang-clean-architecture/internal/validation"
 	"gorm.io/gorm"
 	"log/slog"
 )
@@ -18,13 +18,13 @@ import (
 type AddressUseCase struct {
 	DB                *gorm.DB
 	Log               *slog.Logger
-	Validate          *validator.Validate
+	Validate          *validation.Validator
 	AddressRepository *repository.AddressRepository
 	ContactRepository *repository.ContactRepository
 	AddressProducer   *messaging.AddressProducer
 }
 
-func NewAddressUseCase(db *gorm.DB, logger *slog.Logger, validate *validator.Validate,
+func NewAddressUseCase(db *gorm.DB, logger *slog.Logger, validate *validation.Validator,
 	contactRepository *repository.ContactRepository, addressRepository *repository.AddressRepository,
 	addressProducer *messaging.AddressProducer) *AddressUseCase {
 	return &AddressUseCase{

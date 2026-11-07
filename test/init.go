@@ -3,8 +3,8 @@ package test
 import (
 	"github.com/primestrider/golang-clean-architecture/internal/config"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
+	"github.com/primestrider/golang-clean-architecture/internal/validation"
 	"gorm.io/gorm"
 	"log/slog"
 )
@@ -17,7 +17,7 @@ var viperConfig *config.Config
 
 var log *slog.Logger
 
-var validate *validator.Validate
+var validate *validation.Validator
 
 func init() {
 	var err error
@@ -26,8 +26,8 @@ func init() {
 		panic(err)
 	}
 	log = config.NewLogger(viperConfig)
-	validate = config.NewValidator(viperConfig)
-	app = config.NewFiber(viperConfig)
+	validate = validation.New()
+	app = config.NewFiber(viperConfig, log)
 	db, err = config.NewDatabase(viperConfig, log)
 	if err != nil {
 		panic(err)
