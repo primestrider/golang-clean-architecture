@@ -132,9 +132,3 @@ func (c *UserUseCase) Update(ctx context.Context, req *model.UpdateUserRequest) 
 	}
 	return converter.UserToResponse(user), nil
 }
-
-// isNotFound melaporkan apakah err adalah apperror NOT_FOUND.
-func isNotFound(err error) bool {
-	appErr, ok := apperror.As(err)
-	return ok && appErr.Code == apperror.CodeNotFound
-}
