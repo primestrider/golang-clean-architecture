@@ -25,7 +25,7 @@
     "access_ttl": "15m",
     "refresh_ttl": "168h"
   },
-  "rate_limit": { "global_per_minute": 100, "auth_per_minute": 5, "auth_ip_per_minute": 20 },
+  "rate_limit": { "global_per_minute": 100, "auth_per_minute": 5, "auth_ip_per_minute": 20, "auth_email_failures_per_minute": 30 },
   "kafka": {
     "enabled": false,
     "brokers": ["localhost:9092"],

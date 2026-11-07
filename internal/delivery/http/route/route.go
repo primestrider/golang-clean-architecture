@@ -17,11 +17,14 @@ type RouteConfig struct {
 	AddressController *http.AddressController
 	AdminController   *http.AdminController
 	AuthMiddleware    fiber.Handler
-	// AuthEmailRateLimit dan AuthIPRateLimit membatasi login dan registrasi
-	// secara independen: per email (menebak password satu akun) dan per IP
-	// (mencoba banyak akun dari satu sumber).
-	AuthEmailRateLimit fiber.Handler
-	AuthIPRateLimit    fiber.Handler
+	// Tiga limiter independen untuk login dan registrasi:
+	//   - AuthIPEmailRateLimit: satu IP menebak password satu akun;
+	//   - AuthIPRateLimit: satu IP mencoba banyak akun (credential stuffing);
+	//   - AuthEmailRateLimit: banyak IP menebak satu akun (hanya kegagalan
+	//     yang dihitung, supaya pemilik akun tidak mudah dikunci penyerang).
+	AuthIPEmailRateLimit fiber.Handler
+	AuthIPRateLimit      fiber.Handler
+	AuthEmailRateLimit   fiber.Handler
 	// RefreshRateLimit membatasi refresh token per IP.
 	RefreshRateLimit fiber.Handler
 }
@@ -45,8 +48,10 @@ func (c *RouteConfig) setupAdminRoutes(admin fiber.Router) {
 
 // setupGuestRoutes mendaftarkan endpoint yang bisa diakses tanpa login.
 func (c *RouteConfig) setupGuestRoutes(api fiber.Router) {
-	api.Post("/users", c.AuthIPRateLimit, c.AuthEmailRateLimit, c.UserController.Register)
-	api.Post("/auth/login", c.AuthIPRateLimit, c.AuthEmailRateLimit, c.AuthController.Login)
+	// RenderErrors membuat limiter kegagalan per email bisa melihat status
+	// error (401, 409, ...) yang dikembalikan controller.
+	api.Post("/users", c.AuthIPRateLimit, c.AuthIPEmailRateLimit, c.AuthEmailRateLimit, middleware.RenderErrors(), c.UserController.Register)
+	api.Post("/auth/login", c.AuthIPRateLimit, c.AuthIPEmailRateLimit, c.AuthEmailRateLimit, middleware.RenderErrors(), c.AuthController.Login)
 	api.Post("/auth/refresh", c.RefreshRateLimit, c.AuthController.Refresh)
 	api.Post("/auth/logout", c.AuthController.Logout)
 }

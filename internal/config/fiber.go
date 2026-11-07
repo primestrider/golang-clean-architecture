@@ -25,10 +25,13 @@ func NewFiber(cfg *Config, log *slog.Logger) *fiber.App {
 		TrustProxy:       trusted,
 		TrustProxyConfig: fiber.TrustProxyConfig{Proxies: cfg.Server.TrustedProxies},
 		ProxyHeader:      proxyHeader(trusted),
-		// Dengan validasi IP, rantai X-Forwarded-For ditelusuri dari kanan dan
-		// alamat proxy tepercaya dilewati, sehingga yang diambil adalah hop
-		// pertama yang tidak tepercaya (IP client asli), bukan entri paling
-		// kiri yang bisa diisi sembarang oleh client.
+		// Menurut dokumentasi Fiber, dengan EnableIPValidation dan
+		// TrustProxyConfig.Proxies terisi, rantai X-Forwarded-For ditelusuri
+		// dari kanan dan alamat proxy tepercaya dilewati, sehingga yang
+		// diambil adalah hop pertama yang tidak tepercaya (IP client asli),
+		// bukan entri paling kiri yang bisa diisi sembarang oleh client.
+		// Syaratnya: proxy di depan aplikasi menambahkan (append) IP client ke
+		// header tersebut, dan semua IP proxy terdaftar di trusted_proxies.
 		EnableIPValidation: true,
 	})
 }

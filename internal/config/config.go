@@ -115,8 +115,14 @@ type JWTConfig struct {
 type RateLimitConfig struct {
 	// GlobalPerMinute berlaku untuk semua endpoint, per IP.
 	GlobalPerMinute int `mapstructure:"global_per_minute"`
-	// AuthPerMinute membatasi login/registrasi per email, dan refresh per IP.
+	// AuthPerMinute membatasi login/registrasi per kombinasi IP+email, dan
+	// refresh per IP.
 	AuthPerMinute int `mapstructure:"auth_per_minute"`
+	// AuthEmailFailuresPerMinute membatasi percobaan login/registrasi yang
+	// GAGAL untuk satu email dari IP mana pun. Hanya kegagalan yang dihitung
+	// dan batasnya longgar, supaya penyerang tidak mudah mengunci login
+	// pemilik akun yang sah dengan sengaja.
+	AuthEmailFailuresPerMinute int `mapstructure:"auth_email_failures_per_minute"`
 	// AuthIPPerMinute membatasi login/registrasi per IP, berapa pun email
 	// yang dicoba (mencegah credential stuffing dari satu IP).
 	AuthIPPerMinute int `mapstructure:"auth_ip_per_minute"`

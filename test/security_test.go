@@ -15,6 +15,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/primestrider/golang-clean-architecture/internal/config"
 	"github.com/primestrider/golang-clean-architecture/internal/model"
 	"github.com/primestrider/golang-clean-architecture/test/testsupport"
 	"github.com/stretchr/testify/assert"
@@ -205,6 +206,27 @@ func TestLoginRateLimit_PerIPAcrossDifferentEmails(t *testing.T) {
 	for i := range limit + 1 {
 		last, _ = app.Do(t, http.MethodPost, "/api/v1/auth/login",
 			model.LoginRequest{Email: "user" + strconv.Itoa(i) + "@example.com", Password: "salahsalah"}, "")
+	}
+
+	assert.Equal(t, http.StatusTooManyRequests, last.StatusCode)
+}
+
+// TestLoginRateLimit_DistributedFailuresPerEmail: banyak IP (lewat proxy
+// tepercaya) yang menebak password satu akun tetap dibatasi oleh limiter
+// kegagalan per email.
+func TestLoginRateLimit_DistributedFailuresPerEmail(t *testing.T) {
+	app := testsupport.NewWebApp(t, func(cfg *config.Config) {
+		cfg.Server.TrustedProxies = []string{"0.0.0.0", "127.0.0.1"}
+	})
+	app.CreateUser(t, "eko@example.com", "rahasia123")
+	body := `{"email":"eko@example.com","password":"salahsalah"}`
+
+	var last *http.Response
+	for i := range app.Cfg.RateLimit.AuthEmailFailuresPerMinute + 1 {
+		last, _ = rawRequest(t, app, http.MethodPost, "/api/v1/auth/login", body, map[string]string{
+			"Content-Type":    "application/json",
+			"X-Forwarded-For": "203.0.113." + strconv.Itoa(i+1),
+		})
 	}
 
 	assert.Equal(t, http.StatusTooManyRequests, last.StatusCode)
