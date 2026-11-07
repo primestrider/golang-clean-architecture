@@ -103,6 +103,74 @@ func (_c *UserRepository_Create_Call) RunAndReturn(run func(ctx context.Context,
 	return _c
 }
 
+// FindByEmail provides a mock function for the type UserRepository
+func (_mock *UserRepository) FindByEmail(ctx context.Context, email string) (*entity.User, error) {
+	ret := _mock.Called(ctx, email)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindByEmail")
+	}
+
+	var r0 *entity.User
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (*entity.User, error)); ok {
+		return returnFunc(ctx, email)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) *entity.User); ok {
+		r0 = returnFunc(ctx, email)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*entity.User)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, email)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// UserRepository_FindByEmail_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindByEmail'
+type UserRepository_FindByEmail_Call struct {
+	*mock.Call
+}
+
+// FindByEmail is a helper method to define mock.On call
+//   - ctx context.Context
+//   - email string
+func (_e *UserRepository_Expecter) FindByEmail(ctx any, email any) *UserRepository_FindByEmail_Call {
+	return &UserRepository_FindByEmail_Call{Call: _e.mock.On("FindByEmail", ctx, email)}
+}
+
+func (_c *UserRepository_FindByEmail_Call) Run(run func(ctx context.Context, email string)) *UserRepository_FindByEmail_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *UserRepository_FindByEmail_Call) Return(user *entity.User, err error) *UserRepository_FindByEmail_Call {
+	_c.Call.Return(user, err)
+	return _c
+}
+
+func (_c *UserRepository_FindByEmail_Call) RunAndReturn(run func(ctx context.Context, email string) (*entity.User, error)) *UserRepository_FindByEmail_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // FindByID provides a mock function for the type UserRepository
 func (_mock *UserRepository) FindByID(ctx context.Context, id string) (*entity.User, error) {
 	ret := _mock.Called(ctx, id)
@@ -171,70 +239,82 @@ func (_c *UserRepository_FindByID_Call) RunAndReturn(run func(ctx context.Contex
 	return _c
 }
 
-// FindByToken provides a mock function for the type UserRepository
-func (_mock *UserRepository) FindByToken(ctx context.Context, token string) (*entity.User, error) {
-	ret := _mock.Called(ctx, token)
+// List provides a mock function for the type UserRepository
+func (_mock *UserRepository) List(ctx context.Context, page int, size int) ([]entity.User, int64, error) {
+	ret := _mock.Called(ctx, page, size)
 
 	if len(ret) == 0 {
-		panic("no return value specified for FindByToken")
+		panic("no return value specified for List")
 	}
 
-	var r0 *entity.User
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (*entity.User, error)); ok {
-		return returnFunc(ctx, token)
+	var r0 []entity.User
+	var r1 int64
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, int, int) ([]entity.User, int64, error)); ok {
+		return returnFunc(ctx, page, size)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) *entity.User); ok {
-		r0 = returnFunc(ctx, token)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, int, int) []entity.User); ok {
+		r0 = returnFunc(ctx, page, size)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*entity.User)
+			r0 = ret.Get(0).([]entity.User)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, token)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, int, int) int64); ok {
+		r1 = returnFunc(ctx, page, size)
 	} else {
-		r1 = ret.Error(1)
+		r1 = ret.Get(1).(int64)
 	}
-	return r0, r1
+	if returnFunc, ok := ret.Get(2).(func(context.Context, int, int) error); ok {
+		r2 = returnFunc(ctx, page, size)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
 }
 
-// UserRepository_FindByToken_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindByToken'
-type UserRepository_FindByToken_Call struct {
+// UserRepository_List_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'List'
+type UserRepository_List_Call struct {
 	*mock.Call
 }
 
-// FindByToken is a helper method to define mock.On call
+// List is a helper method to define mock.On call
 //   - ctx context.Context
-//   - token string
-func (_e *UserRepository_Expecter) FindByToken(ctx any, token any) *UserRepository_FindByToken_Call {
-	return &UserRepository_FindByToken_Call{Call: _e.mock.On("FindByToken", ctx, token)}
+//   - page int
+//   - size int
+func (_e *UserRepository_Expecter) List(ctx any, page any, size any) *UserRepository_List_Call {
+	return &UserRepository_List_Call{Call: _e.mock.On("List", ctx, page, size)}
 }
 
-func (_c *UserRepository_FindByToken_Call) Run(run func(ctx context.Context, token string)) *UserRepository_FindByToken_Call {
+func (_c *UserRepository_List_Call) Run(run func(ctx context.Context, page int, size int)) *UserRepository_List_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 string
+		var arg1 int
 		if args[1] != nil {
-			arg1 = args[1].(string)
+			arg1 = args[1].(int)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
 		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
 }
 
-func (_c *UserRepository_FindByToken_Call) Return(user *entity.User, err error) *UserRepository_FindByToken_Call {
-	_c.Call.Return(user, err)
+func (_c *UserRepository_List_Call) Return(users []entity.User, n int64, err error) *UserRepository_List_Call {
+	_c.Call.Return(users, n, err)
 	return _c
 }
 
-func (_c *UserRepository_FindByToken_Call) RunAndReturn(run func(ctx context.Context, token string) (*entity.User, error)) *UserRepository_FindByToken_Call {
+func (_c *UserRepository_List_Call) RunAndReturn(run func(ctx context.Context, page int, size int) ([]entity.User, int64, error)) *UserRepository_List_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -16,8 +16,8 @@ import (
 // loggedIn menyiapkan aplikasi dengan satu user yang sudah login.
 func loggedIn(t *testing.T) (*testsupport.TestApp, string, string) {
 	app := testsupport.NewWebApp(t)
-	app.CreateUser(t, "eko", "rahasia123")
-	return app, "eko", app.Login(t, "eko", "rahasia123")
+	user := app.CreateUser(t, "eko@example.com", "rahasia123")
+	return app, user.ID, app.TokenFor(t, user)
 }
 
 func TestCreateContact_Success(t *testing.T) {
@@ -55,7 +55,7 @@ func TestGetContact_Success(t *testing.T) {
 
 func TestGetContact_OtherUsersContactIsNotFound(t *testing.T) {
 	app, _, token := loggedIn(t)
-	other := app.CreateUser(t, "other", "rahasia123")
+	other := app.CreateUser(t, "other@example.com", "rahasia123")
 	contact := app.CreateContact(t, other.ID, "Rahasia")
 
 	resp, _ := app.Do(t, http.MethodGet, "/api/v1/contacts/"+contact.ID, nil, token)

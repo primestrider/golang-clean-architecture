@@ -29,10 +29,20 @@ type EventPublisher interface {
 
 // UserRepository adalah akses data user yang dibutuhkan use case.
 type UserRepository interface {
+	// Create menyimpan user baru. Email yang sudah terdaftar menghasilkan
+	// apperror CONFLICT.
 	Create(ctx context.Context, user *entity.User) error
 	Update(ctx context.Context, user *entity.User) error
 	FindByID(ctx context.Context, id string) (*entity.User, error)
-	FindByToken(ctx context.Context, token string) (*entity.User, error)
+	FindByEmail(ctx context.Context, email string) (*entity.User, error)
+	List(ctx context.Context, page, size int) ([]entity.User, int64, error)
+}
+
+// RefreshTokenRepository adalah akses data refresh token.
+type RefreshTokenRepository interface {
+	// RevokeAllForUser mencabut semua refresh token aktif milik user,
+	// misalnya setelah password diganti.
+	RevokeAllForUser(ctx context.Context, userID string) error
 }
 
 // ContactRepository adalah akses data kontak yang dibutuhkan use case.

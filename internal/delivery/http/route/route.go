@@ -27,12 +27,10 @@ func (c *RouteConfig) Setup() {
 // setupGuestRoutes mendaftarkan endpoint yang bisa diakses tanpa login.
 func (c *RouteConfig) setupGuestRoutes(api fiber.Router) {
 	api.Post("/users", c.UserController.Register)
-	api.Post("/users/_login", c.UserController.Login)
 }
 
 // setupAuthRoutes mendaftarkan endpoint yang membutuhkan login.
 func (c *RouteConfig) setupAuthRoutes(api fiber.Router) {
-	api.Delete("/users", c.UserController.Logout)
 	api.Patch("/users/_current", c.UserController.Update)
 	api.Get("/users/_current", c.UserController.Current)
 

@@ -28,7 +28,7 @@ func TestCreateAddress_Success(t *testing.T) {
 
 func TestCreateAddress_OnOtherUsersContactIsNotFound(t *testing.T) {
 	app, _, token := loggedIn(t)
-	other := app.CreateUser(t, "other", "rahasia123")
+	other := app.CreateUser(t, "other@example.com", "rahasia123")
 	contact := app.CreateContact(t, other.ID, "Rahasia")
 
 	resp, _ := app.Do(t, http.MethodPost, "/api/v1/contacts/"+contact.ID+"/addresses",

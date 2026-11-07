@@ -18,6 +18,10 @@ import (
 func NewDatabase(cfg *Config, log *slog.Logger) (*gorm.DB, error) {
 	db, err := gorm.Open(mysql.Open(DSN(cfg.Database)), &gorm.Config{
 		Logger: newGormLogger(cfg, log),
+		// TranslateError mengubah error khusus MySQL (misalnya duplicate key
+		// 1062) menjadi error GORM generik seperti gorm.ErrDuplicatedKey,
+		// sehingga repository tidak bergantung pada kode error MySQL.
+		TranslateError: true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("connect database: %w", err)

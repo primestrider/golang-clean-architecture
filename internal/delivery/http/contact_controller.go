@@ -23,7 +23,7 @@ func (h *ContactController) Create(c fiber.Ctx) error {
 	if err := c.Bind().Body(req); err != nil {
 		return fiber.ErrBadRequest
 	}
-	req.UserID = middleware.GetUser(c).ID
+	req.UserID = middleware.CurrentAuth(c).UserID
 	res, err := h.contacts.Create(c.Context(), req)
 	if err != nil {
 		return err
@@ -35,7 +35,7 @@ func (h *ContactController) Create(c fiber.Ctx) error {
 // page (default 1), dan size (default 10).
 func (h *ContactController) List(c fiber.Ctx) error {
 	req := &model.SearchContactRequest{
-		UserID: middleware.GetUser(c).ID,
+		UserID: middleware.CurrentAuth(c).UserID,
 		Name:   c.Query("name"),
 		Email:  c.Query("email"),
 		Phone:  c.Query("phone"),
@@ -51,7 +51,7 @@ func (h *ContactController) List(c fiber.Ctx) error {
 
 // Get menangani GET /api/v1/contacts/:contactId.
 func (h *ContactController) Get(c fiber.Ctx) error {
-	req := &model.GetContactRequest{UserID: middleware.GetUser(c).ID, ID: c.Params("contactId")}
+	req := &model.GetContactRequest{UserID: middleware.CurrentAuth(c).UserID, ID: c.Params("contactId")}
 	res, err := h.contacts.Get(c.Context(), req)
 	if err != nil {
 		return err
@@ -65,7 +65,7 @@ func (h *ContactController) Update(c fiber.Ctx) error {
 	if err := c.Bind().Body(req); err != nil {
 		return fiber.ErrBadRequest
 	}
-	req.UserID = middleware.GetUser(c).ID
+	req.UserID = middleware.CurrentAuth(c).UserID
 	req.ID = c.Params("contactId")
 	res, err := h.contacts.Update(c.Context(), req)
 	if err != nil {
@@ -76,7 +76,7 @@ func (h *ContactController) Update(c fiber.Ctx) error {
 
 // Delete menangani DELETE /api/v1/contacts/:contactId.
 func (h *ContactController) Delete(c fiber.Ctx) error {
-	req := &model.DeleteContactRequest{UserID: middleware.GetUser(c).ID, ID: c.Params("contactId")}
+	req := &model.DeleteContactRequest{UserID: middleware.CurrentAuth(c).UserID, ID: c.Params("contactId")}
 	if err := h.contacts.Delete(c.Context(), req); err != nil {
 		return err
 	}

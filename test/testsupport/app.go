@@ -79,7 +79,7 @@ func Reset(t testing.TB, db *gorm.DB) {
 }
 
 // Do mengirim request ke aplikasi. body di-encode sebagai JSON bila tidak
-// nil; token (bila tidak kosong) dikirim di header Authorization.
+// nil; token (bila tidak kosong) dikirim sebagai "Authorization: Bearer <token>".
 // Mengembalikan respons dan body mentahnya. Body respons sudah dibaca dan
 // ditutup di sini, jadi pemanggil tidak perlu menutupnya lagi.
 func (a *TestApp) Do(t testing.TB, method, path string, body any, token string) (*http.Response, []byte) {
@@ -96,7 +96,7 @@ func (a *TestApp) Do(t testing.TB, method, path string, body any, token string) 
 	}
 	req.Header.Set("Accept", "application/json")
 	if token != "" {
-		req.Header.Set("Authorization", token)
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	resp, err := a.App.Test(req)
 	require.NoError(t, err)

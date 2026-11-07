@@ -103,4 +103,5 @@ require (
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
+	gorm.io/plugin/soft_delete v1.2.1 // indirect
 )

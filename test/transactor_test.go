@@ -17,7 +17,7 @@ import (
 
 func TestTransactor_RollsBackOnError(t *testing.T) {
 	app := testsupport.NewWebApp(t)
-	user := app.CreateUser(t, "eko", "rahasia123")
+	user := app.CreateUser(t, "eko@example.com", "rahasia123")
 	tx := repository.NewTransactor(app.DB)
 	contacts := repository.NewContactRepository(app.DB)
 	contact := &entity.Contact{ID: uuid.NewString(), UserID: user.ID, FirstName: "Budi"}
@@ -36,7 +36,7 @@ func TestTransactor_RollsBackOnError(t *testing.T) {
 
 func TestTransactor_CommitsOnSuccess(t *testing.T) {
 	app := testsupport.NewWebApp(t)
-	user := app.CreateUser(t, "eko", "rahasia123")
+	user := app.CreateUser(t, "eko@example.com", "rahasia123")
 	tx := repository.NewTransactor(app.DB)
 	contacts := repository.NewContactRepository(app.DB)
 	contact := &entity.Contact{ID: uuid.NewString(), UserID: user.ID, FirstName: "Budi"}

@@ -31,13 +31,17 @@ func BootstrapWeb(deps *WebDeps) {
 	userRepository := repository.NewUserRepository(deps.DB)
 	contactRepository := repository.NewContactRepository(deps.DB)
 	addressRepository := repository.NewAddressRepository(deps.DB)
+	refreshTokenRepository := repository.NewRefreshTokenRepository(deps.DB)
+
+	// Penerbit dan pemverifikasi access token JWT.
+	tokens := NewTokenIssuer(deps.Config)
 
 	// Publisher event.
 	events := usecase.NewNoopEventPublisher(deps.Log)
 
 	// Use case: logika bisnis.
 	validate := validation.New()
-	userUseCase := usecase.NewUserUseCase(deps.Log, validate, tx, userRepository, events)
+	userUseCase := usecase.NewUserUseCase(deps.Log, validate, tx, userRepository, refreshTokenRepository, events)
 	contactUseCase := usecase.NewContactUseCase(deps.Log, validate, tx, contactRepository, events)
 	addressUseCase := usecase.NewAddressUseCase(deps.Log, validate, tx, contactRepository, addressRepository, events)
 
@@ -47,7 +51,7 @@ func BootstrapWeb(deps *WebDeps) {
 		UserController:    http.NewUserController(userUseCase),
 		ContactController: http.NewContactController(contactUseCase),
 		AddressController: http.NewAddressController(addressUseCase),
-		AuthMiddleware:    middleware.NewAuth(userUseCase),
+		AuthMiddleware:    middleware.NewAuth(tokens),
 	}
 	routes.Setup()
 }

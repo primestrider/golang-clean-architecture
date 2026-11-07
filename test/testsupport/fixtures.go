@@ -1,34 +1,37 @@
 package testsupport
 
 import (
-	"net/http"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/primestrider/golang-clean-architecture/internal/config"
 	"github.com/primestrider/golang-clean-architecture/internal/entity"
-	"github.com/primestrider/golang-clean-architecture/internal/model"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// CreateUser menyimpan user langsung ke database (tanpa lewat API) dan
-// mengembalikannya. Gunakan untuk menyiapkan data; uji alur registrasi
-// lewat API di test registrasi itu sendiri.
-func (a *TestApp) CreateUser(t testing.TB, id, password string) *entity.User {
+// CreateUser menyimpan user (role "user") langsung ke database tanpa lewat
+// API dan mengembalikannya. Gunakan untuk menyiapkan data; alur registrasi
+// diuji lewat API di test registrasi itu sendiri.
+func (a *TestApp) CreateUser(t testing.TB, email, password string) *entity.User {
 	t.Helper()
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 	require.NoError(t, err)
-	user := &entity.User{ID: id, Name: "User " + id, Password: string(hash)}
+	user := &entity.User{
+		ID: uuid.NewString(), Email: email, Name: "User " + email,
+		Password: string(hash), Role: entity.RoleUser, Version: 1,
+	}
 	require.NoError(t, a.DB.Create(user).Error)
 	return user
 }
 
-// Login masuk lewat API dan mengembalikan token untuk header Authorization.
-func (a *TestApp) Login(t testing.TB, id, password string) string {
+// TokenFor menerbitkan access token untuk user tanpa lewat endpoint login.
+// Berguna untuk test yang tidak sedang menguji login itu sendiri.
+func (a *TestApp) TokenFor(t testing.TB, user *entity.User) string {
 	t.Helper()
-	resp, raw := a.Do(t, http.MethodPost, "/api/v1/users/_login", model.LoginUserRequest{ID: id, Password: password}, "")
-	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
-	return DecodeData[model.UserResponse](t, raw).Token
+	token, _, err := config.NewTokenIssuer(a.Cfg).Issue(user.ID, user.Role)
+	require.NoError(t, err)
+	return token
 }
 
 // CreateContact menyimpan kontak milik userID langsung ke database.

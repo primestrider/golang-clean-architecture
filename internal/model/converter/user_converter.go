@@ -10,16 +10,12 @@ import (
 func UserToResponse(user *entity.User) *model.UserResponse {
 	return &model.UserResponse{
 		ID:        user.ID,
+		Email:     user.Email,
 		Name:      user.Name,
+		Role:      user.Role,
+		Version:   user.Version,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
-	}
-}
-
-// UserToTokenResponse membuat respons login yang hanya berisi token.
-func UserToTokenResponse(user *entity.User) *model.UserResponse {
-	return &model.UserResponse{
-		Token: user.Token,
 	}
 }
 
@@ -27,7 +23,9 @@ func UserToTokenResponse(user *entity.User) *model.UserResponse {
 func UserToEvent(user *entity.User) *model.UserEvent {
 	return &model.UserEvent{
 		ID:        user.ID,
+		Email:     user.Email,
 		Name:      user.Name,
+		Role:      user.Role,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 	}

@@ -23,7 +23,7 @@ func (h *AddressController) Create(c fiber.Ctx) error {
 	if err := c.Bind().Body(req); err != nil {
 		return fiber.ErrBadRequest
 	}
-	req.UserID = middleware.GetUser(c).ID
+	req.UserID = middleware.CurrentAuth(c).UserID
 	req.ContactID = c.Params("contactId")
 	res, err := h.addresses.Create(c.Context(), req)
 	if err != nil {
@@ -34,7 +34,7 @@ func (h *AddressController) Create(c fiber.Ctx) error {
 
 // List menangani GET /api/v1/contacts/:contactId/addresses.
 func (h *AddressController) List(c fiber.Ctx) error {
-	req := &model.ListAddressRequest{UserID: middleware.GetUser(c).ID, ContactID: c.Params("contactId")}
+	req := &model.ListAddressRequest{UserID: middleware.CurrentAuth(c).UserID, ContactID: c.Params("contactId")}
 	res, err := h.addresses.List(c.Context(), req)
 	if err != nil {
 		return err
@@ -45,7 +45,7 @@ func (h *AddressController) List(c fiber.Ctx) error {
 // Get menangani GET /api/v1/contacts/:contactId/addresses/:addressId.
 func (h *AddressController) Get(c fiber.Ctx) error {
 	req := &model.GetAddressRequest{
-		UserID:    middleware.GetUser(c).ID,
+		UserID:    middleware.CurrentAuth(c).UserID,
 		ContactID: c.Params("contactId"),
 		ID:        c.Params("addressId"),
 	}
@@ -62,7 +62,7 @@ func (h *AddressController) Update(c fiber.Ctx) error {
 	if err := c.Bind().Body(req); err != nil {
 		return fiber.ErrBadRequest
 	}
-	req.UserID = middleware.GetUser(c).ID
+	req.UserID = middleware.CurrentAuth(c).UserID
 	req.ContactID = c.Params("contactId")
 	req.ID = c.Params("addressId")
 	res, err := h.addresses.Update(c.Context(), req)
@@ -75,7 +75,7 @@ func (h *AddressController) Update(c fiber.Ctx) error {
 // Delete menangani DELETE /api/v1/contacts/:contactId/addresses/:addressId.
 func (h *AddressController) Delete(c fiber.Ctx) error {
 	req := &model.DeleteAddressRequest{
-		UserID:    middleware.GetUser(c).ID,
+		UserID:    middleware.CurrentAuth(c).UserID,
 		ContactID: c.Params("contactId"),
 		ID:        c.Params("addressId"),
 	}

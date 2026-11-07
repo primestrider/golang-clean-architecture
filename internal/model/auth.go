@@ -1,9 +1,9 @@
 package model
 
-// Auth adalah identitas user yang sedang login, hasil verifikasi token oleh
-// middleware autentikasi. Controller membacanya untuk mengisi field UserID
-// pada request.
+// Auth adalah identitas user yang sedang login, hasil verifikasi access
+// token oleh middleware autentikasi. Controller membacanya untuk mengisi
+// field UserID pada request, dan middleware otorisasi memakai Role.
 type Auth struct {
-	// ID adalah id user yang login.
-	ID string
+	UserID string
+	Role   string
 }
