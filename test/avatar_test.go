@@ -91,3 +91,21 @@ func TestAvatar_RouteAbsentWhenStorageDisabled(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
+
+// TestAvatarUpload_BumpsVersion: upload avatar mengubah data user, jadi
+// version naik. Update profil yang berbasis version lama harus ditolak (409)
+// alih-alih menimpa avatar_key atau mengembalikan hash password lama.
+func TestAvatarUpload_BumpsVersion(t *testing.T) {
+	app := appWithStorage(t)
+	user := app.CreateUser(t, "eko@example.com", "rahasia123")
+	token := app.TokenFor(t, user)
+	var img bytes.Buffer
+	require.NoError(t, png.Encode(&img, image.NewRGBA(image.Rect(0, 0, 2, 2))))
+
+	resp, raw := uploadAvatar(t, app, token, "me.png", img.Bytes())
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
+	assert.Equal(t, 2, testsupport.DecodeData[model.UserResponse](t, raw).Version)
+
+	resp, _ = app.Do(t, http.MethodPatch, "/api/v1/users/_current", model.UpdateUserRequest{Name: "Stale", Version: 1}, token)
+	assert.Equal(t, http.StatusConflict, resp.StatusCode)
+}

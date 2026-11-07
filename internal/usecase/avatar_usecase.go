@@ -81,8 +81,11 @@ func (c *AvatarUseCase) Upload(ctx context.Context, userID string, file io.Reade
 			return err
 		}
 		oldKey = user.AvatarKey
-		user.AvatarKey = &key
-		return c.users.Update(ctx, user)
+		if err := c.users.SetAvatarKey(ctx, userID, &key); err != nil {
+			return err
+		}
+		user, err = c.users.FindByID(ctx, userID)
+		return err
 	})
 	if err != nil {
 		// Data user gagal diperbarui: buang object yang baru diunggah.
@@ -104,8 +107,7 @@ func (c *AvatarUseCase) Remove(ctx context.Context, userID string) error {
 			return err
 		}
 		oldKey = user.AvatarKey
-		user.AvatarKey = nil
-		return c.users.Update(ctx, user)
+		return c.users.SetAvatarKey(ctx, userID, nil)
 	})
 	if err != nil {
 		return err

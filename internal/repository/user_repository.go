@@ -48,3 +48,17 @@ func (r *UserRepository) List(ctx context.Context, page, size int) ([]entity.Use
 	}
 	return users, total, nil
 }
+
+// SetAvatarKey mengubah kolom avatar_key saja dan menaikkan version, supaya
+// update profil yang membawa version lama ditolak (CONFLICT).
+func (r *UserRepository) SetAvatarKey(ctx context.Context, userID string, key *string) error {
+	res := r.db(ctx).Model(&entity.User{}).Where("id = ?", userID).
+		Updates(map[string]any{"avatar_key": key, "version": gorm.Expr("version + 1")})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return apperror.NotFound(r.Name)
+	}
+	return nil
+}

@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"time"
 
 	"github.com/primestrider/golang-clean-architecture/internal/entity"
@@ -28,6 +29,22 @@ var ErrUnavailable = errors.New("destination unavailable")
 // Unavailable membungkus err sebagai ErrUnavailable.
 func Unavailable(err error) error {
 	return fmt.Errorf("%w: %w", ErrUnavailable, err)
+}
+
+// IsTransient melaporkan apakah err adalah gangguan sementara: sudah ditandai
+// ErrUnavailable, error jaringan, timeout, atau error yang menyatakan dirinya
+// sementara lewat method IsTemp() (misalnya balasan SMTP 4xx dari go-mail).
+// Error lain dianggap permanen dan dihitung sebagai percobaan gagal.
+func IsTransient(err error) bool {
+	if errors.Is(err, ErrUnavailable) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+	var temp interface{ IsTemp() bool }
+	return errors.As(err, &temp) && temp.IsTemp()
 }
 
 // Repository adalah akses tabel outbox yang dibutuhkan relay.

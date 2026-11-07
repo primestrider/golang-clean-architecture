@@ -70,8 +70,8 @@ func TestPromoteByEmail_NotFound(t *testing.T) {
 
 func TestPromoteByEmail_SetsAdminRole(t *testing.T) {
 	uc, users, events := newAdminUseCase(t)
-	users.EXPECT().FindByEmail(mock.Anything, "eko@example.com").Return(&entity.User{ID: "u1", Role: entity.RoleUser}, nil)
-	users.EXPECT().Update(mock.Anything, mock.MatchedBy(func(u *entity.User) bool { return u.Role == entity.RoleAdmin })).Return(nil)
+	users.EXPECT().FindByEmail(mock.Anything, "eko@example.com").Return(&entity.User{ID: "u1", Role: entity.RoleUser, Version: 3}, nil)
+	users.EXPECT().UpdateWithVersion(mock.Anything, mock.MatchedBy(func(u *entity.User) bool { return u.Role == entity.RoleAdmin }), 3).Return(nil)
 	events.EXPECT().Publish(mock.Anything, mock.Anything).Return(nil)
 
 	res, err := uc.PromoteByEmail(context.Background(), "eko@example.com")

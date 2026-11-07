@@ -94,7 +94,7 @@ func (c *AdminUseCase) PromoteByEmail(ctx context.Context, email string) (*model
 		}
 		before := converter.UserToResponse(user)
 		user.Role = entity.RoleAdmin
-		if err := c.users.Update(ctx, user); err != nil {
+		if err := c.users.UpdateWithVersion(ctx, user, user.Version); err != nil {
 			return err
 		}
 		if err := c.audit.Record(ctx, "user.role_changed", "user", user.ID, before, converter.UserToResponse(user)); err != nil {

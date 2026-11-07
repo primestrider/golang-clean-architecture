@@ -319,59 +319,65 @@ func (_c *UserRepository_List_Call) RunAndReturn(run func(ctx context.Context, p
 	return _c
 }
 
-// Update provides a mock function for the type UserRepository
-func (_mock *UserRepository) Update(ctx context.Context, user *entity.User) error {
-	ret := _mock.Called(ctx, user)
+// SetAvatarKey provides a mock function for the type UserRepository
+func (_mock *UserRepository) SetAvatarKey(ctx context.Context, userID string, key *string) error {
+	ret := _mock.Called(ctx, userID, key)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Update")
+		panic("no return value specified for SetAvatarKey")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *entity.User) error); ok {
-		r0 = returnFunc(ctx, user)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, *string) error); ok {
+		r0 = returnFunc(ctx, userID, key)
 	} else {
 		r0 = ret.Error(0)
 	}
 	return r0
 }
 
-// UserRepository_Update_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Update'
-type UserRepository_Update_Call struct {
+// UserRepository_SetAvatarKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetAvatarKey'
+type UserRepository_SetAvatarKey_Call struct {
 	*mock.Call
 }
 
-// Update is a helper method to define mock.On call
+// SetAvatarKey is a helper method to define mock.On call
 //   - ctx context.Context
-//   - user *entity.User
-func (_e *UserRepository_Expecter) Update(ctx any, user any) *UserRepository_Update_Call {
-	return &UserRepository_Update_Call{Call: _e.mock.On("Update", ctx, user)}
+//   - userID string
+//   - key *string
+func (_e *UserRepository_Expecter) SetAvatarKey(ctx any, userID any, key any) *UserRepository_SetAvatarKey_Call {
+	return &UserRepository_SetAvatarKey_Call{Call: _e.mock.On("SetAvatarKey", ctx, userID, key)}
 }
 
-func (_c *UserRepository_Update_Call) Run(run func(ctx context.Context, user *entity.User)) *UserRepository_Update_Call {
+func (_c *UserRepository_SetAvatarKey_Call) Run(run func(ctx context.Context, userID string, key *string)) *UserRepository_SetAvatarKey_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 *entity.User
+		var arg1 string
 		if args[1] != nil {
-			arg1 = args[1].(*entity.User)
+			arg1 = args[1].(string)
+		}
+		var arg2 *string
+		if args[2] != nil {
+			arg2 = args[2].(*string)
 		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
 }
 
-func (_c *UserRepository_Update_Call) Return(err error) *UserRepository_Update_Call {
+func (_c *UserRepository_SetAvatarKey_Call) Return(err error) *UserRepository_SetAvatarKey_Call {
 	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *UserRepository_Update_Call) RunAndReturn(run func(ctx context.Context, user *entity.User) error) *UserRepository_Update_Call {
+func (_c *UserRepository_SetAvatarKey_Call) RunAndReturn(run func(ctx context.Context, userID string, key *string) error) *UserRepository_SetAvatarKey_Call {
 	_c.Call.Return(run)
 	return _c
 }

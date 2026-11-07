@@ -73,8 +73,11 @@ func TestUpload_ReplacesAndDeletesOldAfterCommit(t *testing.T) {
 		assert.Equal(t, data, stored, "the full file, including the sniffed header, must be stored")
 		return nil
 	})
-	f.users.EXPECT().FindByID(mock.Anything, "u1").Return(&entity.User{ID: "u1", AvatarKey: &old}, nil)
-	f.users.EXPECT().Update(mock.Anything, mock.MatchedBy(func(u *entity.User) bool { return u.AvatarKey != nil && *u.AvatarKey == newKey })).Return(nil)
+	f.users.EXPECT().FindByID(mock.Anything, "u1").Return(&entity.User{ID: "u1", AvatarKey: &old}, nil).Once()
+	f.users.EXPECT().SetAvatarKey(mock.Anything, "u1", mock.MatchedBy(func(k *string) bool { return k != nil && *k == newKey })).Return(nil)
+	f.users.EXPECT().FindByID(mock.Anything, "u1").RunAndReturn(func(context.Context, string) (*entity.User, error) {
+		return &entity.User{ID: "u1", AvatarKey: &newKey, Version: 2}, nil
+	}).Once()
 	f.storage.EXPECT().Delete(mock.Anything, old).RunAndReturn(func(context.Context, string) error {
 		assert.False(t, f.tx.inTx, "old avatar is deleted only after the transaction commits")
 		return nil
@@ -91,7 +94,7 @@ func TestRemove_ClearsKeyAndDeletesObject(t *testing.T) {
 	f := newAvatarFixture(t)
 	old := "avatars/u1/old.png"
 	f.users.EXPECT().FindByID(mock.Anything, "u1").Return(&entity.User{ID: "u1", AvatarKey: &old}, nil)
-	f.users.EXPECT().Update(mock.Anything, mock.MatchedBy(func(u *entity.User) bool { return u.AvatarKey == nil })).Return(nil)
+	f.users.EXPECT().SetAvatarKey(mock.Anything, "u1", (*string)(nil)).Return(nil)
 	f.storage.EXPECT().Delete(mock.Anything, old).Return(nil)
 
 	require.NoError(t, f.uc.Remove(context.Background(), "u1"))

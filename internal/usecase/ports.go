@@ -34,7 +34,10 @@ type UserRepository interface {
 	// Create menyimpan user baru. Email yang sudah terdaftar menghasilkan
 	// apperror CONFLICT.
 	Create(ctx context.Context, user *entity.User) error
-	Update(ctx context.Context, user *entity.User) error
+	// SetAvatarKey mengubah hanya kolom avatar_key dan menaikkan version.
+	// Menulis satu kolom (bukan seluruh baris) mencegah perubahan lain yang
+	// terjadi bersamaan, misalnya ganti password, tertimpa data lama.
+	SetAvatarKey(ctx context.Context, userID string, key *string) error
 	// UpdateWithVersion menyimpan perubahan hanya bila versi di database
 	// masih expectedVersion (optimistic locking); jika tidak, CONFLICT.
 	UpdateWithVersion(ctx context.Context, user *entity.User, expectedVersion int) error

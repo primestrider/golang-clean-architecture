@@ -134,11 +134,15 @@ func (d *LocalDispatcher) Dispatch(ctx context.Context, row entity.OutboxEvent) 
 		_ = json.Unmarshal(row.Headers, &headers)
 	}
 	ctx = observability.ExtractContext(ctx, headers)
-	// Kegagalan handler lokal (misalnya server email down) diperlakukan
-	// sebagai gangguan sementara: event tetap pending dan dicoba lagi, tidak
-	// diparkir, sama seperti saat broker Kafka mati.
+	// Gangguan sementara (server email down, jaringan putus) ditandai
+	// Unavailable: event tetap pending tanpa dihitung sebagai percobaan.
+	// Error permanen (misalnya alamat email tidak valid) dihitung, sehingga
+	// event akhirnya diparkir dan tidak menahan relay selamanya.
 	if err := d.registry.Handle(ctx, e); err != nil {
-		return outbox.Unavailable(err)
+		if outbox.IsTransient(err) {
+			return outbox.Unavailable(err)
+		}
+		return err
 	}
 	return nil
 }
