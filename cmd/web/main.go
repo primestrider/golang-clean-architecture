@@ -1,59 +1,160 @@
+// Command web menjalankan API HTTP beserta server admin (health check dan
+// metrics).
+//
+// Siklus hidupnya: muat config, buat dependency, jalankan server, lalu
+// tunggu sinyal SIGINT/SIGTERM. Saat sinyal datang, aplikasi melakukan
+// graceful shutdown: berhenti menerima request baru, menunggu request yang
+// sedang berjalan selesai, lalu menutup koneksi ke dependency.
 package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"golang-clean-architecture/internal/config"
+	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/primestrider/golang-clean-architecture/internal/config"
+	"github.com/primestrider/golang-clean-architecture/internal/delivery/admin"
+	deliverygrpc "github.com/primestrider/golang-clean-architecture/internal/delivery/grpc"
+	"github.com/primestrider/golang-clean-architecture/internal/gateway/storage"
+	"github.com/primestrider/golang-clean-architecture/internal/observability"
+	"github.com/primestrider/golang-clean-architecture/internal/usecase"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"google.golang.org/grpc"
 )
 
 func main() {
-	viperConfig := config.NewViper()
-	log := config.NewLogger(viperConfig)
-	db := config.NewDatabase(viperConfig, log)
-	validate := config.NewValidator(viperConfig)
-	app := config.NewFiber(viperConfig, log)
-	producer := config.NewKafkaProducer(viperConfig, log)
-
-	config.Bootstrap(&config.BootstrapConfig{
-		DB:       db,
-		App:      app,
-		Log:      log,
-		Validate: validate,
-		Config:   viperConfig,
-		Producer: producer,
-	})
-
-	// cancelled on SIGINT/SIGTERM; Fiber then stops accepting requests and drains in-flight ones
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	webPort := viperConfig.GetInt("web.port")
-	err := app.Listen(fmt.Sprintf(":%d", webPort), fiber.ListenConfig{
-		EnablePrefork:   viperConfig.GetBool("web.prefork"),
-		GracefulContext: ctx,
-		ShutdownTimeout: 10 * time.Second,
-	})
-	if err != nil {
-		log.Error("Failed to start server", "error", err)
+	if err := run(); err != nil {
+		slog.Error("web stopped with error", "error", err)
 		os.Exit(1)
 	}
+}
 
-	// Listen returns after shutdown; release resources once in-flight requests are done
-	if producer != nil {
-		if err := producer.Close(); err != nil {
-			log.Error("Failed to close kafka producer", "error", err)
-		}
+// run berisi seluruh logika main. Dipisah supaya error cukup dikembalikan
+// dan defer tetap berjalan (os.Exit di tengah fungsi akan melewati defer).
+func run() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
 	}
-	if sqlDB, err := db.DB(); err == nil {
-		if err := sqlDB.Close(); err != nil {
-			log.Error("Failed to close database", "error", err)
-		}
+	log := config.NewLogger(cfg)
+
+	shutdownTracing, err := config.NewTracerProvider(context.Background(), cfg)
+	if err != nil {
+		return err
 	}
-	log.Info("Server stopped")
+
+	db, err := config.NewDatabase(cfg, log)
+	if err != nil {
+		return err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+
+	// Registry Prometheus milik aplikasi (bukan registry global), supaya
+	// metrik yang diekspos hanya yang memang didaftarkan aplikasi ini.
+	registry := prometheus.NewRegistry()
+	metrics := observability.NewMetrics(registry)
+	metrics.Register(collectors.NewDBStatsCollector(sqlDB, cfg.Database.Name))
+
+	redisClient, err := config.NewRedis(cfg)
+	if err != nil {
+		return err
+	}
+
+	objectStorage, err := config.NewStorage(cfg)
+	if err != nil {
+		return err
+	}
+
+	app := config.NewFiber(cfg, log)
+	components := config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics, Redis: redisClient, Storage: storageOrNil(objectStorage)})
+
+	checks := map[string]admin.Check{"db": sqlDB.PingContext}
+	if objectStorage != nil {
+		checks["storage"] = objectStorage.Ping
+	}
+	if redisClient != nil {
+		checks["redis"] = func(ctx context.Context) error { return redisClient.Ping(ctx).Err() }
+	}
+	adminServer := admin.NewServer(fmt.Sprintf(":%d", cfg.Admin.Port), log, checks)
+	adminServer.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
+
+	// ctx dibatalkan saat menerima SIGINT (Ctrl+C) atau SIGTERM (dikirim
+	// Docker/Kubernetes ketika container dihentikan).
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	serverErr := make(chan error, 3)
+	go func() { serverErr <- adminServer.Start() }()
+	go func() {
+		addr := fmt.Sprintf(":%d", cfg.Server.Port)
+		log.Info("http server listening", "addr", addr)
+		serverErr <- app.Listen(addr, fiber.ListenConfig{DisableStartupMessage: true})
+	}()
+
+	// Server gRPC opsional di port terpisah, memakai use case yang sama.
+	var grpcServer *grpc.Server
+	if cfg.GRPC.Enabled {
+		grpcServer = config.NewGRPCServer(cfg, log, components)
+		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.GRPC.Port))
+		if err != nil {
+			return err
+		}
+		go func() {
+			log.Info("grpc server listening", "addr", listener.Addr().String())
+			serverErr <- grpcServer.Serve(listener)
+		}()
+	}
+
+	var runErr error
+	select {
+	case <-ctx.Done():
+		log.Info("shutdown signal received")
+	case runErr = <-serverErr:
+		log.Error("server stopped unexpectedly", "error", runErr)
+	}
+
+	// Urutan shutdown penting:
+	//  1. tandai not-ready supaya load balancer berhenti mengirim traffic,
+	//  2. hentikan server dan tunggu request yang sedang berjalan,
+	//  3. baru tutup dependency yang dipakai request tersebut.
+	adminServer.SetReady(false)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Shutdown.Timeout)
+	defer cancel()
+
+	errs := []error{runErr}
+	errs = append(errs, app.ShutdownWithContext(shutdownCtx))
+	if grpcServer != nil {
+		// Menunggu RPC yang sedang berjalan, paling lama sampai shutdownCtx habis.
+		deliverygrpc.Shutdown(shutdownCtx, grpcServer)
+	}
+	errs = append(errs, adminServer.Shutdown(shutdownCtx))
+	if redisClient != nil {
+		errs = append(errs, redisClient.Close())
+	}
+	errs = append(errs, sqlDB.Close())
+	errs = append(errs, shutdownTracing(shutdownCtx))
+
+	log.Info("shutdown complete")
+	return errors.Join(errs...)
+}
+
+// storageOrNil mengubah pointer nil menjadi interface nil. Tanpa ini,
+// interface berisi pointer nil dianggap tidak nil oleh pengecekan
+// "deps.Storage != nil".
+func storageOrNil(s *storage.MinioStorage) usecase.ObjectStorage {
+	if s == nil {
+		return nil
+	}
+	return s
 }

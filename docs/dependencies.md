@@ -17,9 +17,9 @@ Dokumen ini menjelaskan cara Go mengelola dependency di proyek ini, serta fungsi
 `go.mod` adalah file definisi **module** Go. Isinya identitas proyek dan daftar dependency beserta versinya. File ini ditulis manusia dan dirawat oleh perintah `go`.
 
 ```go
-module golang-clean-architecture   // nama module, dipakai sebagai prefix import
+module github.com/primestrider/golang-clean-architecture  // nama module, prefix import
 
-go 1.26.0                          // versi minimum bahasa Go
+go 1.27.3                                                // versi minimum bahasa Go
 
 require (                          // dependency langsung
 	github.com/gofiber/fiber/v3 v3.6.1
@@ -34,8 +34,8 @@ require (                          // dependency tidak langsung
 
 | Directive | Fungsi |
 |---|---|
-| `module` | Nama module. Package internal di-import dengan prefix ini, misalnya `golang-clean-architecture/internal/config`. |
-| `go` | Versi minimum Go untuk mem-build proyek. Nilai ini juga menentukan fitur bahasa yang boleh dipakai. Contohnya, `sync.WaitGroup.Go` yang dipakai di `cmd/worker/main.go` butuh Go ≥ 1.25. |
+| `module` | Nama module. Package internal di-import dengan prefix ini, misalnya `github.com/primestrider/golang-clean-architecture/internal/config`. |
+| `go` | Versi minimum Go untuk mem-build proyek. Nilai ini juga menentukan fitur bahasa yang boleh dipakai. Contohnya, `for b.Loop()` di benchmark butuh Go ≥ 1.24. |
 | `require` | Daftar module beserta versi minimum yang dibutuhkan. |
 | `// indirect` | Module ini tidak di-import langsung oleh kode proyek, tapi dibutuhkan oleh dependency lain. |
 
@@ -84,97 +84,96 @@ Setiap module biasanya punya dua baris:
 
 ## Dependency langsung
 
-Package berikut di-import langsung oleh kode proyek.
+Package berikut di-import langsung oleh kode proyek, dikelompokkan menurut
+fungsinya. Versi lengkap ada di `go.mod`.
 
-| Package | Versi | Fungsi | Dipakai di |
-|---|---|---|---|
-| [`github.com/gofiber/fiber/v3`](https://github.com/gofiber/fiber) | v3.6.1 | Web framework HTTP berbasis fasthttp, dengan API mirip Express.js. Mengurus routing, middleware (termasuk `recover`), request/response, error handler, dan graceful shutdown lewat `ListenConfig.GracefulContext`. | `internal/config/fiber.go`, `cmd/web/main.go`, `internal/delivery/http/` |
-| [`gorm.io/gorm`](https://gorm.io) | v1.31.2 | ORM (Object Relational Mapper). Memetakan struct Go ke tabel database dan menangani query serta transaksi. | `internal/repository/`, `internal/usecase/` |
-| [`gorm.io/driver/mysql`](https://github.com/go-gorm/mysql) | v1.6.0 | Driver MySQL untuk GORM. | `internal/config/gorm.go` |
-| [`github.com/IBM/sarama`](https://github.com/IBM/sarama) | v1.61.1 | Client Apache Kafka. Dipakai untuk mengirim event (producer) dan membaca event (consumer group). | `internal/config/kafka.go`, `internal/gateway/messaging/`, `internal/delivery/messaging/` |
-| [`github.com/spf13/viper`](https://github.com/spf13/viper) | v1.21.0 | Pembaca konfigurasi dari `config.json`. Nilainya bisa ditimpa environment variable, misalnya `DATABASE_PASSWORD`. | `internal/config/viper.go` |
-| [`github.com/go-playground/validator/v10`](https://github.com/go-playground/validator) | v10.30.5 | Validasi struct lewat tag, misalnya `validate:"required,max=100"`. | `internal/config/validator.go`, `internal/model/`, `internal/usecase/` |
-| [`golang.org/x/crypto`](https://pkg.go.dev/golang.org/x/crypto) | v0.58.0 | Library kriptografi resmi tim Go. Proyek ini memakai `bcrypt` untuk hashing password. | `internal/usecase/user_usecase.go` |
-| [`github.com/google/uuid`](https://github.com/google/uuid) | v1.6.0 | Membuat UUID. Dipakai untuk token login dan ID data. | `internal/usecase/` |
-| [`github.com/stretchr/testify`](https://github.com/stretchr/testify) | v1.12.1 | Helper testing (`assert`, `require`). | `test/` |
+### HTTP dan gRPC
 
-Untuk logging, proyek ini memakai [`log/slog`](https://pkg.go.dev/log/slog) dari standard library Go, jadi tidak tercantum di `go.mod`. Logger dibuat di `internal/config/logger.go` dengan output JSON. Levelnya diatur lewat `log.level` di `config.json` (`debug`, `info`, `warn`, atau `error`) atau env `LOG_LEVEL`.
+| Package | Fungsi | Dipakai di |
+|---|---|---|
+| [`github.com/gofiber/fiber/v3`](https://github.com/gofiber/fiber) | Web framework HTTP berbasis fasthttp: routing, middleware, binding, error handler, graceful shutdown. | `internal/config/fiber.go`, `internal/delivery/http/` |
+| [`github.com/gofiber/storage/memory/v2` dan `.../redis/v3`](https://github.com/gofiber/storage) | Storage penghitung rate limiter: memori lokal (cadangan) dan Redis (bersama antarinstance). | `internal/delivery/http/middleware/storage.go`, `internal/config/web.go` |
+| [`google.golang.org/grpc`](https://grpc.io/docs/languages/go/), [`google.golang.org/protobuf`](https://pkg.go.dev/google.golang.org/protobuf) | Server gRPC dan kode hasil generate dari `.proto`. | `internal/delivery/grpc/` |
+| [`google.golang.org/genproto/googleapis/rpc`](https://pkg.go.dev/google.golang.org/genproto/googleapis/rpc) | Detail error gRPC terstruktur (`BadRequest`, `ErrorInfo`). | `internal/delivery/grpc/errors.go` |
+| [`github.com/grpc-ecosystem/go-grpc-middleware/v2`](https://github.com/grpc-ecosystem/go-grpc-middleware) | Interceptor gRPC (recovery, logging, metrik Prometheus). | `internal/delivery/grpc/server.go` |
+| [`golang.org/x/time`](https://pkg.go.dev/golang.org/x/time/rate) | Rate limiter token bucket untuk gRPC. | `internal/delivery/grpc/limits.go` |
+
+### Data dan konfigurasi
+
+| Package | Fungsi | Dipakai di |
+|---|---|---|
+| [`gorm.io/gorm`](https://gorm.io), [`gorm.io/driver/mysql`](https://github.com/go-gorm/mysql) | ORM dan driver MySQL. | `internal/config/database.go`, `internal/repository/` |
+| [`gorm.io/plugin/soft_delete`](https://github.com/go-gorm/soft_delete) | Soft delete dengan kolom `deleted_at` BIGINT (0 = aktif). | `internal/entity/` |
+| [`github.com/golang-migrate/migrate/v4`](https://github.com/golang-migrate/migrate) | Menjalankan migrasi SQL di integration test. Di lingkungan lain migrasi dijalankan lewat container `migrate` (`make migrate-up`). | `test/testsupport/` |
+| [`github.com/spf13/viper`](https://github.com/spf13/viper) | Membaca `config.json` yang bisa ditimpa env berawalan `APP_`, misalnya `APP_DATABASE_PASSWORD`. | `internal/config/config.go` |
+| [`github.com/go-playground/validator/v10`](https://github.com/go-playground/validator) | Validasi struct lewat tag, misalnya `validate:"required,max=100"`. | `internal/validation/` |
+| [`github.com/google/uuid`](https://github.com/google/uuid) | Membuat UUID untuk ID data dan event. | `internal/usecase/`, `internal/model/` |
+
+### Keamanan
+
+| Package | Fungsi | Dipakai di |
+|---|---|---|
+| [`golang.org/x/crypto`](https://pkg.go.dev/golang.org/x/crypto) | `bcrypt` untuk hash password. | `internal/security/password.go` |
+| [`github.com/golang-jwt/jwt/v5`](https://github.com/golang-jwt/jwt) | Menerbitkan dan memverifikasi access token JWT (HS256). | `internal/security/jwt.go` |
+
+### Event, layanan luar, dan pekerjaan terjadwal
+
+| Package | Fungsi | Dipakai di |
+|---|---|---|
+| [`github.com/IBM/sarama`](https://github.com/IBM/sarama) | Client Kafka: producer untuk relay outbox dan consumer group di worker. | `internal/config/kafka.go`, `internal/outbox/`, `internal/delivery/messaging/` |
+| [`github.com/redis/go-redis/v9`](https://github.com/redis/go-redis) | Client Redis untuk cache, rate limit, dan lock scheduler. | `internal/config/redis.go`, `internal/gateway/cache/`, `internal/scheduler/` |
+| [`github.com/minio/minio-go/v7`](https://github.com/minio/minio-go) | Client S3-compatible untuk upload avatar dan presigned URL. | `internal/gateway/storage/` |
+| [`github.com/wneessen/go-mail`](https://github.com/wneessen/go-mail) | Mengirim email lewat SMTP. | `internal/gateway/email/` |
+| [`github.com/go-co-op/gocron/v2`](https://github.com/go-co-op/gocron) | Scheduler cron untuk job pembersihan. | `internal/scheduler/` |
+
+### Observability
+
+| Package | Fungsi | Dipakai di |
+|---|---|---|
+| [`github.com/prometheus/client_golang`](https://github.com/prometheus/client_golang) | Metrik Prometheus dan endpoint `/metrics`. | `internal/observability/metrics.go` |
+| [`go.opentelemetry.io/otel`](https://opentelemetry.io/docs/languages/go/) (+ `sdk`, `trace`, exporter `otlptracegrpc`) | Distributed tracing dan pengiriman span ke collector OTLP. | `internal/observability/tracing.go`, `internal/config/otel.go` |
+| `gofiber/contrib/v3/otel`, `gorm.io/plugin/opentelemetry`, `redisotel`, `otelgrpc` | Instrumentasi tracing otomatis untuk Fiber, GORM, Redis, dan gRPC. | `internal/config/`, `internal/delivery/grpc/server.go` |
+
+Untuk logging, proyek ini memakai [`log/slog`](https://pkg.go.dev/log/slog)
+dari standard library, jadi tidak tercantum di `go.mod`. Logger dibuat di
+`internal/config/logger.go`. Level dan format diatur lewat `log.level`
+(`debug`, `info`, `warn`, `error`) dan `log.format` (`text` atau `json`)
+di `config.json`, atau env `APP_LOG_LEVEL` dan `APP_LOG_FORMAT`.
+
+### Khusus test
+
+| Package | Fungsi | Dipakai di |
+|---|---|---|
+| [`github.com/stretchr/testify`](https://github.com/stretchr/testify) | `assert`, `require`, dan `mock` (dipakai mock hasil mockery). | `internal/**/*_test.go`, `test/` |
+| [`github.com/testcontainers/testcontainers-go`](https://golang.testcontainers.org/) (+ modul `mysql`, `kafka`, `redis`) | Menjalankan container sungguhan di integration test. | `test/testsupport/` |
+| [`gopkg.in/yaml.v3`](https://pkg.go.dev/gopkg.in/yaml.v3) | Membaca `api/openapi.yaml` untuk memastikan semua route terdokumentasi. | `test/docs_test.go` |
+
+Dependency yang hanya dipakai test tetap tercantum di `go.mod`, tetapi
+tidak ikut masuk ke binary production: linker Go hanya menyertakan package
+yang benar-benar di-import oleh `cmd/web`, `cmd/worker`, atau `cmd/cli`.
 
 ---
 
 ## Dependency tidak langsung (indirect)
 
-Module berikut tidak di-import langsung oleh kode proyek, tapi dibutuhkan oleh dependency di atas. Kolom "Dibawa oleh" menunjukkan dependency langsung yang membutuhkannya.
+Baris bertanda `// indirect` (lebih dari seratus di proyek ini) adalah
+module yang dibutuhkan oleh dependency di atas, bukan oleh kode proyek.
+Sebagian besar berasal dari testcontainers (client Docker), OpenTelemetry,
+dan gRPC. Beberapa yang menarik untuk dikenali:
 
-### HTTP (dibawa oleh Fiber)
-
-| Package | Versi | Fungsi |
+| Package | Dibawa oleh | Fungsi |
 |---|---|---|
-| `github.com/valyala/fasthttp` | v1.77.0 | HTTP server berperforma tinggi yang menjadi fondasi Fiber. |
-| `github.com/valyala/bytebufferpool` | v1.0.0 | Pool buffer byte untuk mengurangi alokasi memori. |
-| `github.com/klauspost/compress` | v1.20.3 | Kompresi gzip, deflate, dan zstd. Juga dipakai Sarama untuk kompresi pesan Kafka. |
-| `github.com/molecule-man/go-brrr` | v1.3.1 | Kompresi Brotli untuk respons HTTP. |
-| `github.com/mattn/go-colorable` | v0.1.16 | Output terminal berwarna, termasuk di Windows. |
-| `github.com/mattn/go-isatty` | v0.0.24 | Mendeteksi apakah output mengarah ke terminal. |
-| `github.com/gofiber/utils/v2` | v2.6.2 | Kumpulan helper internal Fiber (konversi string/byte, parsing). |
-| `github.com/gofiber/schema` | v1.8.8 | Decoder form dan query string ke struct, dipakai oleh `Bind()`. |
-| `github.com/tinylib/msgp` | v1.6.5 | Encoder/decoder MessagePack, untuk binding body `application/vnd.msgpack`. |
-| `github.com/philhofer/fwd` | v1.2.0 | Buffered reader/writer, dibawa oleh `msgp`. |
+| `github.com/valyala/fasthttp` | Fiber | HTTP server berperforma tinggi yang menjadi fondasi Fiber. |
+| `github.com/go-sql-driver/mysql` | Driver MySQL GORM | Driver MySQL standar untuk `database/sql`. |
+| `github.com/klauspost/compress`, `github.com/pierrec/lz4/v4` | Fiber, Sarama | Kompresi respons HTTP dan pesan Kafka. |
+| `github.com/jcmturner/gokrb5/v8` | Sarama | Autentikasi Kerberos untuk Kafka (tidak dipakai proyek, tetapi ikut terbawa). |
+| `github.com/moby/moby/client` | testcontainers | Client Docker untuk menjalankan container test. |
 
-### Database (dibawa oleh GORM dan driver MySQL)
+Untuk mengetahui mengapa sebuah module ada, jalankan:
 
-| Package | Versi | Fungsi |
-|---|---|---|
-| `github.com/go-sql-driver/mysql` | v1.10.1 | Driver MySQL standar untuk `database/sql`, dipakai di balik `gorm.io/driver/mysql`. |
-| `filippo.io/edwards25519` | v1.2.0 | Kriptografi kurva Ed25519, dibutuhkan driver MySQL untuk beberapa metode autentikasi. |
-| `github.com/jinzhu/inflection` | v1.0.0 | Mengubah kata tunggal menjadi jamak, misalnya untuk nama tabel otomatis (`User` → `users`). |
-| `github.com/jinzhu/now` | v1.1.5 | Helper manipulasi waktu. |
-
-### Kafka (dibawa oleh Sarama)
-
-| Package | Versi | Fungsi |
-|---|---|---|
-| `github.com/eapache/go-resiliency` | v1.7.0 | Pola ketahanan seperti retrier dan circuit breaker. |
-| `github.com/pierrec/lz4/v4` | v4.1.33 | Kompresi LZ4 untuk pesan Kafka. |
-| `github.com/rcrowley/go-metrics` | pseudo-version | Pengumpulan metrik internal client Kafka. |
-| `github.com/hashicorp/go-uuid` | v1.0.4 | Pembuatan UUID, dibawa oleh library Kerberos. |
-| `github.com/jcmturner/gokrb5/v8` | v8.4.4 | Autentikasi Kerberos (SASL/GSSAPI) untuk Kafka. |
-| `github.com/jcmturner/aescts/v2` | v2.0.0 | Enkripsi AES-CTS untuk Kerberos. |
-| `github.com/jcmturner/dnsutils/v2` | v2.0.0 | Utilitas DNS untuk Kerberos. |
-| `github.com/jcmturner/gofork` | v1.7.6 | Fork beberapa package standar Go yang dibutuhkan Kerberos. |
-| `github.com/jcmturner/rpc/v2` | v2.0.3 | Protokol RPC untuk Kerberos. |
-| `golang.org/x/net` | v0.62.0 | Library jaringan tambahan dari tim Go. |
-
-### Konfigurasi (dibawa oleh Viper)
-
-| Package | Versi | Fungsi |
-|---|---|---|
-| `github.com/fsnotify/fsnotify` | v1.10.1 | Memantau perubahan file, untuk fitur reload config. |
-| `github.com/go-viper/mapstructure/v2` | v2.5.0 | Mengubah `map` menjadi struct. |
-| `github.com/pelletier/go-toml/v2` | v2.4.3 | Parser file TOML. |
-| `go.yaml.in/yaml/v3` | v3.0.5 | Parser file YAML. |
-| `github.com/sagikazarmark/locafero` | v0.12.0 | Pencarian lokasi file konfigurasi. |
-| `github.com/spf13/afero` | v1.15.0 | Abstraksi filesystem. |
-| `github.com/spf13/cast` | v1.10.0 | Konversi tipe data, misalnya string ke int. |
-| `github.com/spf13/pflag` | v1.0.10 | Parsing flag command line. |
-| `github.com/subosito/gotenv` | v1.6.0 | Parser file `.env`. |
-
-### Validasi (dibawa oleh Validator)
-
-| Package | Versi | Fungsi |
-|---|---|---|
-| `github.com/gabriel-vasile/mimetype` | v1.4.16 | Deteksi tipe MIME file, untuk validasi upload. |
-| `github.com/go-playground/locales` | v0.14.2 | Data lokal (bahasa, format angka). |
-| `github.com/go-playground/universal-translator` | v0.18.2 | Penerjemah pesan error validasi. |
-| `github.com/leodido/go-urn` | v1.5.0 | Parser URN untuk validasi tag `urn`. |
-
-### Umum
-
-| Package | Versi | Dibawa oleh | Fungsi |
-|---|---|---|---|
-| `golang.org/x/sys` | v0.49.0 | banyak | Akses system call OS tingkat rendah. |
-| `golang.org/x/text` | v0.43.0 | GORM, Validator | Pemrosesan teks Unicode. |
-| `github.com/davecgh/go-spew` | pseudo-version | Testify | Mencetak isi struct secara detail saat test gagal. |
+```bash
+go mod why -m github.com/jcmturner/gokrb5/v8
+```
 
 ---
 

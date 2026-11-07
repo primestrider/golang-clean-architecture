@@ -1,122 +1,86 @@
 package http
 
 import (
-	"golang-clean-architecture/internal/delivery/http/middleware"
-	"golang-clean-architecture/internal/model"
-	"golang-clean-architecture/internal/usecase"
-	"log/slog"
-
 	"github.com/gofiber/fiber/v3"
+	"github.com/primestrider/golang-clean-architecture/internal/delivery/http/middleware"
+	"github.com/primestrider/golang-clean-architecture/internal/model"
+	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 )
 
+// AddressController menangani endpoint alamat di bawah sebuah kontak.
 type AddressController struct {
-	UseCase *usecase.AddressUseCase
-	Log     *slog.Logger
+	addresses *usecase.AddressUseCase
 }
 
-func NewAddressController(useCase *usecase.AddressUseCase, log *slog.Logger) *AddressController {
-	return &AddressController{
-		Log:     log,
-		UseCase: useCase,
-	}
+// NewAddressController membuat AddressController.
+func NewAddressController(addresses *usecase.AddressUseCase) *AddressController {
+	return &AddressController{addresses: addresses}
 }
 
-func (c *AddressController) Create(ctx fiber.Ctx) error {
-	auth := middleware.GetUser(ctx)
-
-	request := new(model.CreateAddressRequest)
-	if err := ctx.Bind().Body(request); err != nil {
-		c.Log.Error("failed to parse request body", "error", err)
+// Create menangani POST /api/v1/contacts/:contactId/addresses.
+func (h *AddressController) Create(c fiber.Ctx) error {
+	req := new(model.CreateAddressRequest)
+	if err := c.Bind().Body(req); err != nil {
 		return fiber.ErrBadRequest
 	}
-
-	request.UserId = auth.ID
-	request.ContactId = ctx.Params("contactId")
-
-	response, err := c.UseCase.Create(ctx.Context(), request)
+	req.UserID = middleware.CurrentAuth(c).UserID
+	req.ContactID = c.Params("contactId")
+	res, err := h.addresses.Create(c.Context(), req)
 	if err != nil {
-		c.Log.Error("failed to create address", "error", err)
 		return err
 	}
-
-	return ctx.JSON(model.WebResponse[*model.AddressResponse]{Data: response})
+	return c.JSON(model.WebResponse[*model.AddressResponse]{Data: res})
 }
 
-func (c *AddressController) List(ctx fiber.Ctx) error {
-	auth := middleware.GetUser(ctx)
-	contactId := ctx.Params("contactId")
-
-	request := &model.ListAddressRequest{
-		UserId:    auth.ID,
-		ContactId: contactId,
-	}
-
-	responses, err := c.UseCase.List(ctx.Context(), request)
+// List menangani GET /api/v1/contacts/:contactId/addresses.
+func (h *AddressController) List(c fiber.Ctx) error {
+	req := &model.ListAddressRequest{UserID: middleware.CurrentAuth(c).UserID, ContactID: c.Params("contactId")}
+	res, err := h.addresses.List(c.Context(), req)
 	if err != nil {
-		c.Log.Error("failed to list addresses", "error", err)
 		return err
 	}
-
-	return ctx.JSON(model.WebResponse[[]model.AddressResponse]{Data: responses})
+	return c.JSON(model.WebResponse[[]model.AddressResponse]{Data: res})
 }
 
-func (c *AddressController) Get(ctx fiber.Ctx) error {
-	auth := middleware.GetUser(ctx)
-	contactId := ctx.Params("contactId")
-	addressId := ctx.Params("addressId")
-
-	request := &model.GetAddressRequest{
-		UserId:    auth.ID,
-		ContactId: contactId,
-		ID:        addressId,
+// Get menangani GET /api/v1/contacts/:contactId/addresses/:addressId.
+func (h *AddressController) Get(c fiber.Ctx) error {
+	req := &model.GetAddressRequest{
+		UserID:    middleware.CurrentAuth(c).UserID,
+		ContactID: c.Params("contactId"),
+		ID:        c.Params("addressId"),
 	}
-
-	response, err := c.UseCase.Get(ctx.Context(), request)
+	res, err := h.addresses.Get(c.Context(), req)
 	if err != nil {
-		c.Log.Error("failed to get address", "error", err)
 		return err
 	}
-
-	return ctx.JSON(model.WebResponse[*model.AddressResponse]{Data: response})
+	return c.JSON(model.WebResponse[*model.AddressResponse]{Data: res})
 }
 
-func (c *AddressController) Update(ctx fiber.Ctx) error {
-	auth := middleware.GetUser(ctx)
-
-	request := new(model.UpdateAddressRequest)
-	if err := ctx.Bind().Body(request); err != nil {
-		c.Log.Error("failed to parse request body", "error", err)
+// Update menangani PUT /api/v1/contacts/:contactId/addresses/:addressId.
+func (h *AddressController) Update(c fiber.Ctx) error {
+	req := new(model.UpdateAddressRequest)
+	if err := c.Bind().Body(req); err != nil {
 		return fiber.ErrBadRequest
 	}
-
-	request.UserId = auth.ID
-	request.ContactId = ctx.Params("contactId")
-	request.ID = ctx.Params("addressId")
-
-	response, err := c.UseCase.Update(ctx.Context(), request)
+	req.UserID = middleware.CurrentAuth(c).UserID
+	req.ContactID = c.Params("contactId")
+	req.ID = c.Params("addressId")
+	res, err := h.addresses.Update(c.Context(), req)
 	if err != nil {
-		c.Log.Error("failed to update address", "error", err)
 		return err
 	}
-
-	return ctx.JSON(model.WebResponse[*model.AddressResponse]{Data: response})
+	return c.JSON(model.WebResponse[*model.AddressResponse]{Data: res})
 }
 
-func (c *AddressController) Delete(ctx fiber.Ctx) error {
-	auth := middleware.GetUser(ctx)
-	contactId := ctx.Params("contactId")
-	addressId := ctx.Params("addressId")
-
-	request := &model.DeleteAddressRequest{
-		UserId:    auth.ID,
-		ContactId: contactId,
-		ID:        addressId,
+// Delete menangani DELETE /api/v1/contacts/:contactId/addresses/:addressId.
+func (h *AddressController) Delete(c fiber.Ctx) error {
+	req := &model.DeleteAddressRequest{
+		UserID:    middleware.CurrentAuth(c).UserID,
+		ContactID: c.Params("contactId"),
+		ID:        c.Params("addressId"),
 	}
-
-	if err := c.UseCase.Delete(ctx.Context(), request); err != nil {
-		c.Log.Error("failed to delete address", "error", err)
+	if err := h.addresses.Delete(c.Context(), req); err != nil {
 		return err
 	}
-
-	return ctx.JSON(model.WebResponse[bool]{Data: true})
+	return c.JSON(model.WebResponse[bool]{Data: true})
 }

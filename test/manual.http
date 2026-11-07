@@ -1,125 +1,96 @@
-### Register new user
-POST http://localhost:3000/api/users
+### Contoh request manual (VS Code REST Client / JetBrains HTTP Client).
+### Variabel {{host}} ada di http-client.env.json.
+
+### Registrasi
+POST {{host}}/api/v1/users
 Content-Type: application/json
 
-{
-  "name": "Joko",
-  "id": "joko",
-  "password": "joko"
-}
+{"email": "eko@example.com", "password": "rahasia123", "name": "Eko"}
 
-### Login user
-POST http://localhost:3000/api/users/_login
+### Login: salin access_token dan refresh_token dari respons
+POST {{host}}/api/v1/auth/login
 Content-Type: application/json
 
-{
-  "id": "joko",
-  "password": "joko"
-}
+{"email": "eko@example.com", "password": "rahasia123"}
 
-### Get user profile
-GET http://localhost:3000/api/users/_current
-Accept: application/json
-Authorization: {{token}}
-
-### Logout user
-DELETE http://localhost:3000/api/users
-Accept: application/json
-Authorization: {{token}}
-
-### Update user
-PATCH http://localhost:3000/api/users/_current
+### Refresh token (rotasi: token lama tidak bisa dipakai lagi)
+POST {{host}}/api/v1/auth/refresh
 Content-Type: application/json
-Accept: application/json
-Authorization: {{token}}
 
-{
-  "name": "Joko Morro"
-}
+{"refresh_token": "{{refreshToken}}"}
 
-### Create contact
-POST http://localhost:3000/api/contacts
+### Profil
+GET {{host}}/api/v1/users/_current
+Authorization: Bearer {{accessToken}}
+
+### Ubah nama (kirim version terakhir yang dibaca)
+PATCH {{host}}/api/v1/users/_current
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
-Accept: application/json
-Authorization: {{token}}
 
-{
-  "first_name": "Joko",
-  "last_name": "Morro",
-  "phone": "08123456789",
-  "email": "joko@example.com"
-}
+{"name": "Eko Baru", "version": 1}
 
-### Get detail contact
-GET http://localhost:3000/api/contacts/{{contactId}}
+### Ganti password (wajib password lama; semua refresh token dicabut)
+PATCH {{host}}/api/v1/users/_current
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
-Accept: application/json
-Authorization: {{token}}
 
-### Search contacts
-GET http://localhost:3000/api/contacts?size=10&page=1&name=jo&phone=0812&email=joko
+{"current_password": "rahasia123", "new_password": "passwordbaru", "version": 2}
+
+### Upload avatar (hanya bila storage aktif)
+PUT {{host}}/api/v1/users/_current/avatar
+Authorization: Bearer {{accessToken}}
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="avatar.png"
+Content-Type: image/png
+
+< ./avatar.png
+--boundary--
+
+### Buat kontak
+POST {{host}}/api/v1/contacts
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
-Accept: application/json
-Authorization: {{token}}
 
-### update contact
-PUT http://localhost:3000/api/contacts/{{contactId}}
+{"first_name": "Budi", "last_name": "Santoso", "email": "budi@example.com", "phone": "08123456789"}
+
+### Cari kontak
+GET {{host}}/api/v1/contacts?name=bud&page=1&size=10
+Authorization: Bearer {{accessToken}}
+
+### Ubah kontak (PUT = penggantian penuh; version wajib)
+PUT {{host}}/api/v1/contacts/{{contactId}}
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
-Accept: application/json
-Authorization: {{token}}
 
-{
-  "first_name": "Budi",
-  "last_name": "Nugraha",
-  "phone": "088324324",
-  "email": "budi@example.com"
-}
+{"first_name": "Budi", "last_name": "S.", "email": "budi@example.com", "phone": "08123456789", "version": 1}
 
-### delete contact
-DELETE http://localhost:3000/api/contacts/{{contactId}}
-Accept: application/json
-Authorization: {{token}}
+### Hapus kontak (soft delete, ikut menghapus alamatnya)
+DELETE {{host}}/api/v1/contacts/{{contactId}}
+Authorization: Bearer {{accessToken}}
 
-### get all addresses
-GET http://localhost:3000/api/contacts/{{contactId}}/addresses
-Accept: application/json
-Authorization: {{token}}
-
-
-### create new addresses
-POST http://localhost:3000/api/contacts/{{contactId}}/addresses
+### Tambah alamat
+POST {{host}}/api/v1/contacts/{{contactId}}/addresses
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
-Accept: application/json
-Authorization: {{token}}
 
-{
-  "street": "Jl. Jalan",
-  "city": "Jakarta",
-  "province": "DKI Jakarta",
-  "country": "Indonesia",
-  "postal_code": "12345"
-}
+{"street": "Jl. Merdeka 1", "city": "Bandung", "province": "Jawa Barat", "postal_code": "40111", "country": "Indonesia"}
 
-### get address detail
-GET http://localhost:3000/api/contacts/{{contactId}}/addresses/{{addressId}}
-Accept: application/json
-Authorization: {{token}}
+### Daftar user (khusus admin)
+GET {{host}}/api/v1/admin/users?page=1&size=10
+Authorization: Bearer {{accessToken}}
 
-### update address
-PUT http://localhost:3000/api/contacts/{{contactId}}/addresses/{{addressId}}
+### Ubah role user (khusus admin)
+PATCH {{host}}/api/v1/admin/users/{{userId}}/role
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
-Accept: application/json
-Authorization: {{token}}
 
-{
-  "street": "Jl. Sudah Jadi",
-  "city": "Jakarta",
-  "province": "DKI Jakarta",
-  "country": "Indonesia",
-  "postal_code": "12345"
-}
+{"role": "admin", "version": 1}
 
-### delete address
-DELETE http://localhost:3000/api/contacts/{{contactId}}/addresses/{{addressId}}
-Accept: application/json
-Authorization: {{token}}
+### Logout
+POST {{host}}/api/v1/auth/logout
+Content-Type: application/json
+
+{"refresh_token": "{{refreshToken}}"}

@@ -1,40 +1,67 @@
 {
-  "app": {
-    "name": "golang-clean-architecture"
+  "app": { "name": "golang-clean-architecture", "env": "development" },
+  "server": {
+    "port": 3000,
+    "trusted_proxies": [],
+    "cors_origins": ["http://localhost:3000", "http://localhost:5173"],
+    "request_timeout": "10s",
+    "body_limit": 1048576
   },
-  "web": {
-    "prefork": false,
-    "port": 3000
-  },
-  "log": {
-    "level": "debug"
-  },
+  "admin": { "port": 9090, "worker_port": 9091 },
+  "grpc": { "enabled": false, "port": 50051 },
+  "log": { "level": "debug", "format": "text" },
   "database": {
     "username": "root",
     "password": "",
     "host": "localhost",
     "port": 3306,
     "name": "golang_clean_architecture",
-    "pool": {
-      "idle": 10,
-      "max": 100,
-      "lifetime": 300
-    }
+    "pool": { "idle": 10, "max": 100, "lifetime": "5m" }
   },
+  "jwt": {
+    "secret": "dev-only-insecure-secret-change-me-32bytes",
+    "issuer": "golang-clean-architecture",
+    "audience": "golang-clean-architecture-api",
+    "access_ttl": "15m",
+    "refresh_ttl": "168h"
+  },
+  "rate_limit": { "global_per_minute": 100, "auth_per_minute": 5, "refresh_per_minute": 60, "auth_ip_per_minute": 20, "auth_email_failures_per_minute": 10 },
   "kafka": {
-    "bootstrap": {
-      "servers": "localhost:9092"
-    },
-    "group": {
-      "id": "golang-clean-architecture"
-    },
-    "auto": {
-      "offset": {
-        "reset": "earliest"
-      }
-    },
-    "producer": {
-      "enabled": false
-    }
-  }
+    "enabled": false,
+    "brokers": ["localhost:9092"],
+    "group_id": "golang-clean-architecture",
+    "offset_reset": "earliest"
+  },
+  "outbox": { "poll_interval": "1s", "batch_size": 100, "max_attempts": 10 },
+  "consumer": { "max_retries": 3, "initial_backoff": "200ms" },
+  "redis": { "enabled": false, "addr": "localhost:6379", "password": "", "db": 0 },
+  "storage": {
+    "enabled": false,
+    "endpoint": "localhost:8333",
+    "public_endpoint": "",
+    "access_key": "",
+    "secret_key": "",
+    "bucket": "avatars",
+    "use_ssl": false,
+    "presign_ttl": "15m"
+  },
+  "email": {
+    "enabled": false,
+    "host": "localhost",
+    "port": 1025,
+    "username": "",
+    "password": "",
+    "from": "no-reply@example.com",
+    "tls": false
+  },
+  "otel": {
+    "enabled": false,
+    "endpoint": "localhost:4317",
+    "insecure": false,
+    "service_name": "golang-clean-architecture",
+    "sample_ratio": 1.0
+  },
+  "docs": { "enabled": true },
+  "scheduler": { "token_cleanup_cron": "0 3 * * *", "outbox_cleanup_cron": "30 3 * * *" },
+  "shutdown": { "timeout": "15s" }
 }

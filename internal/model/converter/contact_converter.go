@@ -1,10 +1,11 @@
 package converter
 
 import (
-	"golang-clean-architecture/internal/entity"
-	"golang-clean-architecture/internal/model"
+	"github.com/primestrider/golang-clean-architecture/internal/entity"
+	"github.com/primestrider/golang-clean-architecture/internal/model"
 )
 
+// ContactToResponse mengubah entity kontak menjadi respons API.
 func ContactToResponse(contact *entity.Contact) *model.ContactResponse {
 	return &model.ContactResponse{
 		ID:        contact.ID,
@@ -12,19 +13,7 @@ func ContactToResponse(contact *entity.Contact) *model.ContactResponse {
 		LastName:  contact.LastName,
 		Email:     contact.Email,
 		Phone:     contact.Phone,
-		CreatedAt: contact.CreatedAt,
-		UpdatedAt: contact.UpdatedAt,
-	}
-}
-
-func ContactToEvent(contact *entity.Contact) *model.ContactEvent {
-	return &model.ContactEvent{
-		ID:        contact.ID,
-		UserID:    contact.UserId,
-		FirstName: contact.FirstName,
-		LastName:  contact.LastName,
-		Email:     contact.Email,
-		Phone:     contact.Phone,
+		Version:   contact.Version,
 		CreatedAt: contact.CreatedAt,
 		UpdatedAt: contact.UpdatedAt,
 	}

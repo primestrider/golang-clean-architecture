@@ -1,5 +1,6 @@
 package model
 
+// AddressResponse adalah representasi alamat yang dikirim ke client.
 type AddressResponse struct {
 	ID         string `json:"id"`
 	Street     string `json:"street"`
@@ -7,18 +8,21 @@ type AddressResponse struct {
 	Province   string `json:"province"`
 	PostalCode string `json:"postal_code"`
 	Country    string `json:"country"`
+	Version    int    `json:"version"`
 	CreatedAt  int64  `json:"created_at"`
 	UpdatedAt  int64  `json:"updated_at"`
 }
 
+// ListAddressRequest meminta semua alamat milik sebuah kontak.
 type ListAddressRequest struct {
-	UserId    string `json:"-" validate:"required"`
-	ContactId string `json:"-" validate:"required,max=100,uuid"`
+	UserID    string `json:"-" validate:"required"`
+	ContactID string `json:"-" validate:"required,max=100,uuid"`
 }
 
+// CreateAddressRequest adalah input pembuatan alamat.
 type CreateAddressRequest struct {
-	UserId     string `json:"-" validate:"required"`
-	ContactId  string `json:"-" validate:"required,max=100,uuid"`
+	UserID     string `json:"-" validate:"required"`
+	ContactID  string `json:"-" validate:"required,max=100,uuid"`
 	Street     string `json:"street" validate:"max=255"`
 	City       string `json:"city" validate:"max=255"`
 	Province   string `json:"province" validate:"max=255"`
@@ -26,25 +30,30 @@ type CreateAddressRequest struct {
 	Country    string `json:"country" validate:"max=100"`
 }
 
+// UpdateAddressRequest adalah input pengubahan alamat.
 type UpdateAddressRequest struct {
-	UserId     string `json:"-" validate:"required"`
-	ContactId  string `json:"-" validate:"required,max=100,uuid"`
+	UserID     string `json:"-" validate:"required"`
+	ContactID  string `json:"-" validate:"required,max=100,uuid"`
 	ID         string `json:"-" validate:"required,max=100,uuid"`
 	Street     string `json:"street" validate:"max=255"`
 	City       string `json:"city" validate:"max=255"`
 	Province   string `json:"province" validate:"max=255"`
 	PostalCode string `json:"postal_code" validate:"max=10"`
 	Country    string `json:"country" validate:"max=100"`
+	// Version adalah versi data yang terakhir dilihat client (optimistic locking).
+	Version int `json:"version" validate:"required,min=1"`
 }
 
+// GetAddressRequest mengidentifikasi satu alamat.
 type GetAddressRequest struct {
-	UserId    string `json:"-" validate:"required"`
-	ContactId string `json:"-" validate:"required,max=100,uuid"`
+	UserID    string `json:"-" validate:"required"`
+	ContactID string `json:"-" validate:"required,max=100,uuid"`
 	ID        string `json:"-" validate:"required,max=100,uuid"`
 }
 
+// DeleteAddressRequest mengidentifikasi alamat yang akan dihapus.
 type DeleteAddressRequest struct {
-	UserId    string `json:"-" validate:"required"`
-	ContactId string `json:"-" validate:"required,max=100,uuid"`
+	UserID    string `json:"-" validate:"required"`
+	ContactID string `json:"-" validate:"required,max=100,uuid"`
 	ID        string `json:"-" validate:"required,max=100,uuid"`
 }

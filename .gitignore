@@ -3,7 +3,7 @@
 .vscode/
 
 # Build output (go build ./cmd/web, ./cmd/worker)
-/bin/
+bin/
 /web
 /worker
 *.exe
@@ -16,6 +16,7 @@ coverage.html
 # Local secrets (environment overrides for config.json)
 .env
 .env.*
+!.env.example
 
 # JetBrains HTTP Client private environment (tokens, passwords)
 http-client.private.env.json

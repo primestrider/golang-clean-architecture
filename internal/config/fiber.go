@@ -1,37 +1,56 @@
 package config
 
 import (
-	"errors"
 	"log/slog"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/recover"
-	"github.com/spf13/viper"
+	deliveryhttp "github.com/primestrider/golang-clean-architecture/internal/delivery/http"
 )
 
-func NewFiber(config *viper.Viper, log *slog.Logger) *fiber.App {
-	var app = fiber.New(fiber.Config{
-		AppName:      config.GetString("app.name"),
-		ErrorHandler: NewErrorHandler(log),
+// NewFiber membuat aplikasi Fiber dengan error handler Problem Details,
+// sehingga setiap error (dari use case, middleware, atau Fiber sendiri)
+// dikirim ke client dalam satu format yang konsisten.
+//
+// Header X-Forwarded-For hanya dipercaya bila request datang dari proxy di
+// server.trusted_proxies. Tanpa itu, client bisa memalsukan IP-nya sendiri
+// dan mengakali rate limit.
+func NewFiber(cfg *Config, log *slog.Logger) *fiber.App {
+	trusted := len(cfg.Server.TrustedProxies) > 0
+	return fiber.New(fiber.Config{
+		AppName:          cfg.App.Name,
+		ErrorHandler:     deliveryhttp.NewErrorHandler(log),
+		BodyLimit:        bodyLimit(cfg),
+		ReadTimeout:      cfg.Server.RequestTimeout,
+		WriteTimeout:     cfg.Server.RequestTimeout,
+		TrustProxy:       trusted,
+		TrustProxyConfig: fiber.TrustProxyConfig{Proxies: cfg.Server.TrustedProxies},
+		ProxyHeader:      proxyHeader(trusted),
+		// Menurut dokumentasi Fiber, dengan EnableIPValidation dan
+		// TrustProxyConfig.Proxies terisi, rantai X-Forwarded-For ditelusuri
+		// dari kanan dan alamat proxy tepercaya dilewati, sehingga yang
+		// diambil adalah hop pertama yang tidak tepercaya (IP client asli),
+		// bukan entri paling kiri yang bisa diisi sembarang oleh client.
+		// Syaratnya: proxy di depan aplikasi menambahkan (append) IP client ke
+		// header tersebut, dan semua IP proxy terdaftar di trusted_proxies.
+		EnableIPValidation: true,
 	})
-
-	// turn handler panics into 500 responses instead of crashing the server
-	app.Use(recover.New())
-
-	return app
 }
 
-func NewErrorHandler(log *slog.Logger) fiber.ErrorHandler {
-	return func(ctx fiber.Ctx, err error) error {
-		var e *fiber.Error
-		if !errors.As(err, &e) {
-			// unexpected errors (including recovered panics) must not leak details to the client
-			log.Error("Unhandled error", "error", err, "method", ctx.Method(), "path", ctx.Path())
-			e = fiber.ErrInternalServerError
-		}
-
-		return ctx.Status(e.Code).JSON(fiber.Map{
-			"errors": e.Message,
-		})
+// proxyHeader mengembalikan header IP asli client bila ada proxy tepercaya.
+func proxyHeader(trusted bool) string {
+	if trusted {
+		return fiber.HeaderXForwardedFor
 	}
+	return ""
+}
+
+// bodyLimit mengembalikan batas body di level server. Bila upload avatar
+// aktif, batasnya dinaikkan agar file 2 MB (plus overhead multipart) muat;
+// body JSON tetap dibatasi server.body_limit oleh middleware.
+func bodyLimit(cfg *Config) int {
+	const avatarUploadLimit = 2<<20 + 64<<10
+	if cfg.Storage.Enabled && cfg.Server.BodyLimit < avatarUploadLimit {
+		return avatarUploadLimit
+	}
+	return cfg.Server.BodyLimit
 }

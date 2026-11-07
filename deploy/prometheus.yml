@@ -1,0 +1,11 @@
+# Prometheus mengambil metrik dari port admin web dan worker.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: web
+    static_configs:
+      - targets: ["web:9090"]
+  - job_name: worker
+    static_configs:
+      - targets: ["worker:9091"]

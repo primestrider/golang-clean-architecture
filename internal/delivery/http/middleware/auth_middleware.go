@@ -1,28 +1,49 @@
 package middleware
 
 import (
-	"golang-clean-architecture/internal/model"
-	"golang-clean-architecture/internal/usecase"
+	"strings"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/primestrider/golang-clean-architecture/internal/apperror"
+	"github.com/primestrider/golang-clean-architecture/internal/model"
+	"github.com/primestrider/golang-clean-architecture/internal/observability"
+	"github.com/primestrider/golang-clean-architecture/internal/security"
 )
 
-func NewAuth(userUserCase *usecase.UserUseCase) fiber.Handler {
-	return func(ctx fiber.Ctx) error {
-		request := &model.VerifyUserRequest{Token: ctx.Get("Authorization", "NOT_FOUND")}
+// authLocalsKey adalah kunci fiber.Locals untuk menyimpan identitas login.
+const authLocalsKey = "auth"
 
-		auth, err := userUserCase.Verify(ctx.Context(), request)
-		if err != nil {
-			userUserCase.Log.Warn("Failed find user by token", "error", err)
-			return fiber.ErrUnauthorized
+// TokenParser memverifikasi access token. Diimplementasikan oleh
+// security.TokenIssuer.
+type TokenParser interface {
+	Parse(token string) (*security.Claims, error)
+}
+
+// NewAuth membuat middleware yang mewajibkan header
+// "Authorization: Bearer <access token>".
+//
+// Token diverifikasi tanpa ke database (JWT membawa id dan role user yang
+// sudah ditandatangani). Identitas user disimpan di Locals, dan id user
+// dimasukkan ke context supaya ikut tercatat di setiap log request ini.
+func NewAuth(tokens TokenParser) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		scheme, token, ok := strings.Cut(c.Get(fiber.HeaderAuthorization), " ")
+		if !ok || !strings.EqualFold(scheme, "Bearer") || token == "" {
+			return apperror.Unauthorized("missing bearer token")
 		}
-
-		userUserCase.Log.Debug("User authenticated", "user_id", auth.ID)
-		ctx.Locals("auth", auth)
-		return ctx.Next()
+		claims, err := tokens.Parse(token)
+		if err != nil {
+			return err
+		}
+		c.Locals(authLocalsKey, &model.Auth{UserID: claims.UserID, Role: claims.Role})
+		c.SetContext(observability.WithUserID(c.Context(), claims.UserID))
+		return c.Next()
 	}
 }
 
-func GetUser(ctx fiber.Ctx) *model.Auth {
-	return fiber.Locals[*model.Auth](ctx, "auth")
+// CurrentAuth mengambil identitas user yang login. Hanya boleh dipanggil di
+// handler yang berada di belakang middleware NewAuth.
+func CurrentAuth(c fiber.Ctx) *model.Auth {
+	auth, _ := c.Locals(authLocalsKey).(*model.Auth)
+	return auth
 }

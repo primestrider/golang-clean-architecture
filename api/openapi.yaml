@@ -1,0 +1,436 @@
+openapi: 3.1.0
+info:
+  title: Golang Clean Architecture API
+  version: 1.0.0
+  description: |
+    API contoh untuk template Go Clean Architecture.
+
+    - Respons sukses dibungkus `{"data": ..., "paging": ...}`.
+    - Respons error memakai RFC 9457 Problem Details (`application/problem+json`).
+    - Endpoint yang butuh login memakai header `Authorization: Bearer <access_token>`.
+    - Update memakai optimistic locking: kirim `version` terakhir yang Anda baca;
+      bila data sudah diubah orang lain, respons 409.
+servers:
+  - url: http://localhost:3000/api/v1
+security:
+  - bearerAuth: []
+
+paths:
+  /users:
+    post:
+      tags: [Auth]
+      summary: Registrasi user baru
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterRequest" }
+      responses:
+        "201": { $ref: "#/components/responses/User" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login dengan email dan password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Tokens" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Tukar refresh token dengan pasangan token baru (rotasi)
+      description: Refresh token hanya boleh dipakai sekali. Memakai token lama lagi mencabut seluruh sesi.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Tokens" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout (mencabut refresh token sesi ini)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "204": { description: Berhasil logout }
+
+  /users/_current:
+    get:
+      tags: [User]
+      summary: Profil user yang login
+      responses:
+        "200": { $ref: "#/components/responses/User" }
+        "401": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [User]
+      summary: Ubah nama dan/atau password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateUserRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/User" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /users/_current/avatar:
+    put:
+      tags: [User]
+      summary: Unggah avatar (JPEG, PNG, atau WebP, maksimal 2 MB)
+      description: Hanya tersedia bila object storage diaktifkan.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200": { $ref: "#/components/responses/User" }
+        "413": { $ref: "#/components/responses/Problem" }
+        "415": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [User]
+      summary: Hapus avatar
+      responses:
+        "204": { description: Avatar dihapus }
+
+  /contacts:
+    get:
+      tags: [Contact]
+      summary: Cari kontak milik user
+      parameters:
+        - { name: name, in: query, schema: { type: string } }
+        - { name: email, in: query, schema: { type: string } }
+        - { name: phone, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, default: 1, minimum: 1 } }
+        - { name: size, in: query, schema: { type: integer, default: 10, minimum: 1, maximum: 100 } }
+      responses:
+        "200":
+          description: Daftar kontak
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Contact" } }
+                  paging: { $ref: "#/components/schemas/Paging" }
+    post:
+      tags: [Contact]
+      summary: Buat kontak
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactInput" }
+      responses:
+        "200": { $ref: "#/components/responses/Contact" }
+        "400": { $ref: "#/components/responses/Problem" }
+
+  /contacts/{contactId}:
+    parameters:
+      - $ref: "#/components/parameters/ContactId"
+    get:
+      tags: [Contact]
+      summary: Ambil satu kontak
+      responses:
+        "200": { $ref: "#/components/responses/Contact" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      tags: [Contact]
+      summary: Ubah kontak (penggantian penuh)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/ContactInput"
+                - $ref: "#/components/schemas/Versioned"
+      responses:
+        "200": { $ref: "#/components/responses/Contact" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [Contact]
+      summary: Hapus kontak beserta alamatnya (soft delete)
+      responses:
+        "200": { $ref: "#/components/responses/Deleted" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /contacts/{contactId}/addresses:
+    parameters:
+      - $ref: "#/components/parameters/ContactId"
+    get:
+      tags: [Address]
+      summary: Daftar alamat kontak
+      responses:
+        "200":
+          description: Daftar alamat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Address" } }
+    post:
+      tags: [Address]
+      summary: Tambah alamat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddressInput" }
+      responses:
+        "200": { $ref: "#/components/responses/Address" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /contacts/{contactId}/addresses/{addressId}:
+    parameters:
+      - $ref: "#/components/parameters/ContactId"
+      - { name: addressId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Address]
+      summary: Ambil satu alamat
+      responses:
+        "200": { $ref: "#/components/responses/Address" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      tags: [Address]
+      summary: Ubah alamat (penggantian penuh)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/AddressInput"
+                - $ref: "#/components/schemas/Versioned"
+      responses:
+        "200": { $ref: "#/components/responses/Address" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [Address]
+      summary: Hapus alamat (soft delete)
+      responses:
+        "200": { $ref: "#/components/responses/Deleted" }
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: Daftar semua user (khusus admin)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, default: 10, maximum: 100 } }
+      responses:
+        "200":
+          description: Daftar user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/User" } }
+                  paging: { $ref: "#/components/schemas/Paging" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /admin/users/{id}/role:
+    patch:
+      tags: [Admin]
+      summary: Ubah role user (khusus admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - type: object
+                  required: [role]
+                  properties:
+                    role: { type: string, enum: [user, admin] }
+                - $ref: "#/components/schemas/Versioned"
+      responses:
+        "200": { $ref: "#/components/responses/User" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ContactId:
+      name: contactId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Problem:
+      description: Error dalam format RFC 9457 Problem Details
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    User:
+      description: User
+      content:
+        application/json:
+          schema: { type: object, properties: { data: { $ref: "#/components/schemas/User" } } }
+    Tokens:
+      description: Pasangan token
+      content:
+        application/json:
+          schema: { type: object, properties: { data: { $ref: "#/components/schemas/Tokens" } } }
+    Contact:
+      description: Kontak
+      content:
+        application/json:
+          schema: { type: object, properties: { data: { $ref: "#/components/schemas/Contact" } } }
+    Address:
+      description: Alamat
+      content:
+        application/json:
+          schema: { type: object, properties: { data: { $ref: "#/components/schemas/Address" } } }
+    Deleted:
+      description: Data dihapus
+      content:
+        application/json:
+          schema: { type: object, properties: { data: { type: boolean } } }
+
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        request_id: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+    Versioned:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer, minimum: 1, description: Versi terakhir yang dibaca client }
+    Paging:
+      type: object
+      properties:
+        page: { type: integer }
+        size: { type: integer }
+        total_item: { type: integer }
+        total_page: { type: integer }
+    RegisterRequest:
+      type: object
+      required: [email, password, name]
+      properties:
+        email: { type: string, format: email, maxLength: 255 }
+        password: { type: string, minLength: 8, maxLength: 72 }
+        name: { type: string, maxLength: 100 }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string }
+    UpdateUserRequest:
+      allOf:
+        - type: object
+          properties:
+            name: { type: string, maxLength: 100 }
+            current_password: { type: string, description: Wajib bila new_password diisi }
+            new_password: { type: string, minLength: 8, maxLength: 72 }
+        - $ref: "#/components/schemas/Versioned"
+    Tokens:
+      type: object
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        token_type: { type: string, example: Bearer }
+        expires_in: { type: integer, description: Sisa umur access token dalam detik }
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        role: { type: string, enum: [user, admin] }
+        avatar_url: { type: string, format: uri, description: Presigned URL sementara }
+        version: { type: integer }
+        created_at: { type: integer, description: Epoch milidetik }
+        updated_at: { type: integer, description: Epoch milidetik }
+    ContactInput:
+      type: object
+      required: [first_name]
+      properties:
+        first_name: { type: string, maxLength: 100 }
+        last_name: { type: string, maxLength: 100 }
+        email: { type: string, format: email, maxLength: 200 }
+        phone: { type: string, maxLength: 20 }
+    Contact:
+      allOf:
+        - $ref: "#/components/schemas/ContactInput"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            version: { type: integer }
+            created_at: { type: integer }
+            updated_at: { type: integer }
+    AddressInput:
+      type: object
+      properties:
+        street: { type: string, maxLength: 255 }
+        city: { type: string, maxLength: 255 }
+        province: { type: string, maxLength: 255 }
+        postal_code: { type: string, maxLength: 10 }
+        country: { type: string, maxLength: 100 }
+    Address:
+      allOf:
+        - $ref: "#/components/schemas/AddressInput"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            version: { type: integer }
+            created_at: { type: integer }
+            updated_at: { type: integer }

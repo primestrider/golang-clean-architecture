@@ -1,58 +1,112 @@
+// Command worker menjalankan pekerjaan latar belakang: outbox relay,
+// consumer Kafka, dan (di tahap berikutnya) scheduler, beserta server admin
+// untuk health check dan metrics.
+//
+// Seperti binary web, worker melakukan graceful shutdown saat menerima
+// SIGINT/SIGTERM: berhenti mengambil pekerjaan baru, menunggu pekerjaan yang
+// sedang berjalan selesai, lalu menutup koneksi.
 package main
 
 import (
 	"context"
-	"golang-clean-architecture/internal/config"
-	"golang-clean-architecture/internal/delivery/messaging"
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
-	"github.com/spf13/viper"
+	"github.com/primestrider/golang-clean-architecture/internal/config"
+	"github.com/primestrider/golang-clean-architecture/internal/delivery/admin"
+	"github.com/primestrider/golang-clean-architecture/internal/observability"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
-	viperConfig := config.NewViper()
-	logger := config.NewLogger(viperConfig)
-	logger.Info("Starting worker service")
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	var wg sync.WaitGroup
-	wg.Go(func() { RunUserConsumer(logger, viperConfig, ctx) })
-	wg.Go(func() { RunContactConsumer(logger, viperConfig, ctx) })
-	wg.Go(func() { RunAddressConsumer(logger, viperConfig, ctx) })
-
-	terminateSignals := make(chan os.Signal, 1)
-	signal.Notify(terminateSignals, syscall.SIGINT, syscall.SIGTERM)
-
-	s := <-terminateSignals
-	logger.Info("Got stop signal, shutting down worker gracefully", "signal", s.String())
-	cancel()
-
-	wg.Wait() // wait for all consumers to close their consumer groups
-	logger.Info("Worker stopped")
+	if err := run(); err != nil {
+		slog.Error("worker stopped with error", "error", err)
+		os.Exit(1)
+	}
 }
 
-func RunAddressConsumer(logger *slog.Logger, viperConfig *viper.Viper, ctx context.Context) {
-	logger.Info("setup address consumer")
-	addressConsumerGroup := config.NewKafkaConsumerGroup(viperConfig, logger)
-	addressHandler := messaging.NewAddressConsumer(logger)
-	messaging.ConsumeTopic(ctx, addressConsumerGroup, "addresses", logger, addressHandler.Consume)
-}
+// run berisi seluruh logika main; lihat cmd/web untuk alasan pemisahannya.
+func run() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	log := config.NewLogger(cfg).With("component", "worker")
 
-func RunContactConsumer(logger *slog.Logger, viperConfig *viper.Viper, ctx context.Context) {
-	logger.Info("setup contact consumer")
-	contactConsumerGroup := config.NewKafkaConsumerGroup(viperConfig, logger)
-	contactHandler := messaging.NewContactConsumer(logger)
-	messaging.ConsumeTopic(ctx, contactConsumerGroup, "contacts", logger, contactHandler.Consume)
-}
+	shutdownTracing, err := config.NewTracerProvider(context.Background(), cfg)
+	if err != nil {
+		return err
+	}
 
-func RunUserConsumer(logger *slog.Logger, viperConfig *viper.Viper, ctx context.Context) {
-	logger.Info("setup user consumer")
-	userConsumerGroup := config.NewKafkaConsumerGroup(viperConfig, logger)
-	userHandler := messaging.NewUserConsumer(logger)
-	messaging.ConsumeTopic(ctx, userConsumerGroup, "users", logger, userHandler.Consume)
+	db, err := config.NewDatabase(cfg, log)
+	if err != nil {
+		return err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+
+	registry := prometheus.NewRegistry()
+	metrics := observability.NewMetrics(registry)
+	metrics.Register(collectors.NewDBStatsCollector(sqlDB, cfg.Database.Name))
+
+	redisClient, err := config.NewRedis(cfg)
+	if err != nil {
+		return err
+	}
+
+	worker, err := config.BootstrapWorker(&config.WorkerDeps{Config: cfg, Log: log, DB: db, Metrics: metrics, Redis: redisClient})
+	if err != nil {
+		return err
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	checks := map[string]admin.Check{"db": sqlDB.PingContext}
+	if redisClient != nil {
+		checks["redis"] = func(ctx context.Context) error { return redisClient.Ping(ctx).Err() }
+	}
+	adminServer := admin.NewServer(fmt.Sprintf(":%d", cfg.Admin.WorkerPort), log, checks)
+	adminServer.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
+	adminErr := make(chan error, 1)
+	go func() { adminErr <- adminServer.Start() }()
+
+	jobsDone := make(chan struct{})
+	go func() { worker.Run(ctx); close(jobsDone) }()
+
+	var runErr error
+	select {
+	case <-ctx.Done():
+		log.Info("shutdown signal received")
+	case runErr = <-adminErr:
+		log.Error("admin server stopped unexpectedly", "error", runErr)
+		stop()
+	}
+
+	adminServer.SetReady(false)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Shutdown.Timeout)
+	defer cancel()
+
+	select {
+	case <-jobsDone:
+	case <-shutdownCtx.Done():
+		log.Warn("shutdown timeout reached before background jobs finished")
+	}
+
+	errs := []error{runErr, adminServer.Shutdown(shutdownCtx), worker.Close()}
+	if redisClient != nil {
+		errs = append(errs, redisClient.Close())
+	}
+	errs = append(errs, sqlDB.Close(), shutdownTracing(shutdownCtx))
+	err = errors.Join(errs...)
+	log.Info("shutdown complete")
+	return err
 }

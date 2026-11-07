@@ -1,0 +1,14 @@
+# Konfigurasi mockery v3: membuat mock (testify) untuk setiap interface di
+# internal/usecase/ports.go. Jalankan ulang dengan: make mocks
+all: false
+dir: "{{.InterfaceDir}}/mocks"
+filename: "{{.InterfaceName | snakecase}}.go"
+structname: "{{.InterfaceName}}"
+pkgname: mocks
+template: testify
+force-file-write: true
+formatter: gofmt
+packages:
+  github.com/primestrider/golang-clean-architecture/internal/usecase:
+    config:
+      all: true

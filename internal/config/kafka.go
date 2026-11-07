@@ -1,53 +1,46 @@
 package config
 
 import (
+	"fmt"
 	"log/slog"
-	"os"
-	"strings"
 
 	"github.com/IBM/sarama"
-	"github.com/spf13/viper"
 )
 
-func NewKafkaConsumerGroup(config *viper.Viper, log *slog.Logger) sarama.ConsumerGroup {
-	saramaConfig := sarama.NewConfig()
-	saramaConfig.Consumer.Return.Errors = true
-
-	offsetReset := config.GetString("kafka.auto.offset.reset")
-	if offsetReset == "earliest" {
-		saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-	} else {
-		saramaConfig.Consumer.Offsets.Initial = sarama.OffsetNewest
+// NewKafkaConsumerGroup membuat consumer group Kafka. offset_reset
+// "earliest" berarti consumer group baru membaca pesan dari awal topik.
+func NewKafkaConsumerGroup(cfg *Config) (sarama.ConsumerGroup, error) {
+	sc := sarama.NewConfig()
+	sc.Consumer.Return.Errors = true
+	sc.Consumer.Offsets.Initial = sarama.OffsetNewest
+	if cfg.Kafka.OffsetReset == "earliest" {
+		sc.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
-	brokers := strings.Split(config.GetString("kafka.bootstrap.servers"), ",")
-	groupID := config.GetString("kafka.group.id")
-
-	consumerGroup, err := sarama.NewConsumerGroup(brokers, groupID, saramaConfig)
+	group, err := sarama.NewConsumerGroup(cfg.Kafka.Brokers, cfg.Kafka.GroupID, sc)
 	if err != nil {
-		log.Error("Failed to create consumer group", "error", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("create kafka consumer group: %w", err)
 	}
-	return consumerGroup
+	return group, nil
 }
 
-func NewKafkaProducer(config *viper.Viper, log *slog.Logger) sarama.SyncProducer {
-	if !config.GetBool("kafka.producer.enabled") {
-		log.Info("Kafka producer is disabled")
-		return nil
+// NewKafkaProducer membuat producer sinkron yang menunggu konfirmasi semua
+// replica (WaitForAll), sehingga pesan yang dilaporkan terkirim tidak hilang
+// walau satu broker mati. Mengembalikan nil bila Kafka dimatikan.
+func NewKafkaProducer(cfg *Config, log *slog.Logger) (sarama.SyncProducer, error) {
+	if !cfg.Kafka.Enabled {
+		log.Info("kafka producer is disabled")
+		return nil, nil
 	}
 
-	saramaConfig := sarama.NewConfig()
-	saramaConfig.Producer.Return.Successes = true
-	saramaConfig.Producer.RequiredAcks = sarama.WaitForAll
-	saramaConfig.Producer.Retry.Max = 3
+	sc := sarama.NewConfig()
+	sc.Producer.Return.Successes = true
+	sc.Producer.RequiredAcks = sarama.WaitForAll
+	sc.Producer.Retry.Max = 3
 
-	brokers := strings.Split(config.GetString("kafka.bootstrap.servers"), ",")
-
-	producer, err := sarama.NewSyncProducer(brokers, saramaConfig)
+	producer, err := sarama.NewSyncProducer(cfg.Kafka.Brokers, sc)
 	if err != nil {
-		log.Error("Failed to create producer", "error", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("create kafka producer: %w", err)
 	}
-	return producer
+	return producer, nil
 }

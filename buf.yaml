@@ -1,0 +1,10 @@
+# Konfigurasi buf: lint dan breaking-change check untuk file proto.
+version: v2
+modules:
+  - path: api/proto
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE
