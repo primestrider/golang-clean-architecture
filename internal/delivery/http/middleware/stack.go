@@ -31,6 +31,9 @@ type StackConfig struct {
 	GlobalPerMinute int
 	// Storage untuk rate limiter; nil berarti memori proses ini.
 	Storage fiber.Storage
+	// JSONBodyLimit adalah ukuran maksimum body JSON (byte). Batas server
+	// bisa lebih besar untuk mengizinkan upload file.
+	JSONBodyLimit int
 	// Extra disisipkan setelah request id dan sebelum access log, misalnya
 	// middleware tracing dan metrics.
 	Extra []fiber.Handler
@@ -68,7 +71,7 @@ func Apply(app *fiber.App, cfg StackConfig, log *slog.Logger) {
 	}))
 	app.Use(NewRateLimiter(cfg.GlobalPerMinute, time.Minute, func(c fiber.Ctx) string { return "global:" + c.IP() }, cfg.Storage))
 	app.Use(timeout(cfg.RequestTimeout))
-	app.Use(requireJSONBody())
+	app.Use(requireJSONBody(cfg.JSONBodyLimit))
 }
 
 // requestID memakai X-Request-ID dari client bila valid, atau membuat UUID
@@ -123,8 +126,9 @@ func timeout(d time.Duration) fiber.Handler {
 }
 
 // requireJSONBody menolak request berbody yang bukan JSON (atau multipart
-// untuk upload file) dengan 415, alih-alih mencoba mem-parse format lain.
-func requireJSONBody() fiber.Handler {
+// untuk upload file) dengan 415, alih-alih mencoba mem-parse format lain,
+// dan menolak body JSON yang melebihi jsonLimit dengan 413.
+func requireJSONBody(jsonLimit int) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		switch c.Method() {
 		case fiber.MethodPost, fiber.MethodPut, fiber.MethodPatch:
@@ -135,7 +139,13 @@ func requireJSONBody() fiber.Handler {
 			return c.Next()
 		}
 		ctype := strings.ToLower(c.Get(fiber.HeaderContentType))
-		if strings.HasPrefix(ctype, fiber.MIMEApplicationJSON) || strings.HasPrefix(ctype, fiber.MIMEMultipartForm) {
+		if strings.HasPrefix(ctype, fiber.MIMEMultipartForm) {
+			return c.Next()
+		}
+		if strings.HasPrefix(ctype, fiber.MIMEApplicationJSON) {
+			if jsonLimit > 0 && len(c.Body()) > jsonLimit {
+				return apperror.New(apperror.CodePayloadTooLarge, "request body too large")
+			}
 			return c.Next()
 		}
 		return apperror.New(apperror.CodeUnsupportedMedia, "content type must be application/json")

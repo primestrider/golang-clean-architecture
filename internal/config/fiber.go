@@ -19,7 +19,7 @@ func NewFiber(cfg *Config, log *slog.Logger) *fiber.App {
 	return fiber.New(fiber.Config{
 		AppName:          cfg.App.Name,
 		ErrorHandler:     deliveryhttp.NewErrorHandler(log),
-		BodyLimit:        cfg.Server.BodyLimit,
+		BodyLimit:        bodyLimit(cfg),
 		ReadTimeout:      cfg.Server.RequestTimeout,
 		WriteTimeout:     cfg.Server.RequestTimeout,
 		TrustProxy:       trusted,
@@ -42,4 +42,15 @@ func proxyHeader(trusted bool) string {
 		return fiber.HeaderXForwardedFor
 	}
 	return ""
+}
+
+// bodyLimit mengembalikan batas body di level server. Bila upload avatar
+// aktif, batasnya dinaikkan agar file 2 MB (plus overhead multipart) muat;
+// body JSON tetap dibatasi server.body_limit oleh middleware.
+func bodyLimit(cfg *Config) int {
+	const avatarUploadLimit = 2<<20 + 64<<10
+	if cfg.Storage.Enabled && cfg.Server.BodyLimit < avatarUploadLimit {
+		return avatarUploadLimit
+	}
+	return cfg.Server.BodyLimit
 }

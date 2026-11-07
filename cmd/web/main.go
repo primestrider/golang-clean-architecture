@@ -19,7 +19,9 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/primestrider/golang-clean-architecture/internal/config"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/admin"
+	"github.com/primestrider/golang-clean-architecture/internal/gateway/storage"
 	"github.com/primestrider/golang-clean-architecture/internal/observability"
+	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -66,10 +68,18 @@ func run() error {
 		return err
 	}
 
+	objectStorage, err := config.NewStorage(cfg)
+	if err != nil {
+		return err
+	}
+
 	app := config.NewFiber(cfg, log)
-	config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics, Redis: redisClient})
+	config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics, Redis: redisClient, Storage: storageOrNil(objectStorage)})
 
 	checks := map[string]admin.Check{"db": sqlDB.PingContext}
+	if objectStorage != nil {
+		checks["storage"] = objectStorage.Ping
+	}
 	if redisClient != nil {
 		checks["redis"] = func(ctx context.Context) error { return redisClient.Ping(ctx).Err() }
 	}
@@ -116,4 +126,14 @@ func run() error {
 
 	log.Info("shutdown complete")
 	return errors.Join(errs...)
+}
+
+// storageOrNil mengubah pointer nil menjadi interface nil. Tanpa ini,
+// interface berisi pointer nil dianggap tidak nil oleh pengecekan
+// "deps.Storage != nil".
+func storageOrNil(s *storage.MinioStorage) usecase.ObjectStorage {
+	if s == nil {
+		return nil
+	}
+	return s
 }

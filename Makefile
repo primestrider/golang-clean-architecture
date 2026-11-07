@@ -53,7 +53,7 @@ migrate-create: ## Buat file migrasi baru, contoh: make migrate-create NAME=crea
 compose-up: ## Jalankan mode minimal (MySQL + web + worker)
 	docker compose up -d --build
 
-compose-full: ## Jalankan mode lengkap (Kafka, Redis, MinIO, Mailpit, Jaeger, Prometheus)
+compose-full: ## Jalankan mode lengkap (Kafka, Redis, S3, Mailpit, Jaeger, Prometheus)
 	APP_ENV_FILE=deploy/full.env docker compose --profile full up -d --build
 
 compose-down: ## Hentikan semua container (data volume tetap ada)

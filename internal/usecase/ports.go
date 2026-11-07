@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/primestrider/golang-clean-architecture/internal/entity"
@@ -102,4 +103,13 @@ type Cache interface {
 	Get(ctx context.Context, key string, dst any) (bool, error)
 	Set(ctx context.Context, key string, value any, ttl time.Duration) error
 	Delete(ctx context.Context, keys ...string) error
+}
+
+// ObjectStorage menyimpan file (object) di storage S3-compatible.
+type ObjectStorage interface {
+	Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) error
+	Delete(ctx context.Context, key string) error
+	// PresignGet membuat URL sementara untuk mengunduh object privat tanpa
+	// kredensial, berlaku selama ttl.
+	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
 }

@@ -37,7 +37,7 @@
   "redis": { "enabled": false, "addr": "localhost:6379", "password": "", "db": 0 },
   "storage": {
     "enabled": false,
-    "endpoint": "localhost:9000",
+    "endpoint": "localhost:8333",
     "public_endpoint": "",
     "access_key": "",
     "secret_key": "",

@@ -16,7 +16,9 @@ type RouteConfig struct {
 	ContactController *http.ContactController
 	AddressController *http.AddressController
 	AdminController   *http.AdminController
-	AuthMiddleware    fiber.Handler
+	// AvatarController nil bila object storage dimatikan.
+	AvatarController *http.AvatarController
+	AuthMiddleware   fiber.Handler
 	// Tiga limiter independen untuk login dan registrasi:
 	//   - AuthIPEmailRateLimit: satu IP menebak password satu akun;
 	//   - AuthIPRateLimit: satu IP mencoba banyak akun (credential stuffing);
@@ -60,6 +62,10 @@ func (c *RouteConfig) setupGuestRoutes(api fiber.Router) {
 func (c *RouteConfig) setupAuthRoutes(api fiber.Router) {
 	api.Patch("/users/_current", c.UserController.Update)
 	api.Get("/users/_current", c.UserController.Current)
+	if c.AvatarController != nil {
+		api.Put("/users/_current/avatar", c.AvatarController.Upload)
+		api.Delete("/users/_current/avatar", c.AvatarController.Remove)
+	}
 
 	api.Get("/contacts", c.ContactController.List)
 	api.Post("/contacts", c.ContactController.Create)

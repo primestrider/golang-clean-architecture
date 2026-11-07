@@ -24,12 +24,16 @@ type UserUseCase struct {
 	tokens   RefreshTokenRepository
 	events   EventPublisher
 	audit    *AuditRecorder
+	// respond membentuk respons user; diganti AvatarUseCase.Response bila
+	// object storage aktif supaya respons memuat presigned URL avatar.
+	respond func(ctx context.Context, user *entity.User) *model.UserResponse
 }
 
 // NewUserUseCase membuat UserUseCase dengan dependency-nya.
 func NewUserUseCase(log *slog.Logger, validate *validation.Validator, tx Transactor,
 	users UserRepository, tokens RefreshTokenRepository, events EventPublisher, audit *AuditRecorder) *UserUseCase {
-	return &UserUseCase{log: log, validate: validate, tx: tx, users: users, tokens: tokens, events: events, audit: audit}
+	return &UserUseCase{log: log, validate: validate, tx: tx, users: users, tokens: tokens, events: events, audit: audit,
+		respond: func(_ context.Context, u *entity.User) *model.UserResponse { return converter.UserToResponse(u) }}
 }
 
 // NormalizeEmail merapikan email (huruf kecil, tanpa spasi di tepi) supaya
@@ -83,7 +87,13 @@ func (c *UserUseCase) Current(ctx context.Context, req *model.GetUserRequest) (*
 	if err != nil {
 		return nil, err
 	}
-	return converter.UserToResponse(user), nil
+	return c.respond(ctx, user), nil
+}
+
+// UseAvatarURLs membuat respons user menyertakan presigned URL avatar.
+// Dipanggil saat bootstrap bila object storage aktif.
+func (c *UserUseCase) UseAvatarURLs(avatars *AvatarUseCase) {
+	c.respond = avatars.Response
 }
 
 // Update mengubah nama dan/atau password user yang login.

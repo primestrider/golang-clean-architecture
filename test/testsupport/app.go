@@ -8,11 +8,13 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/primestrider/golang-clean-architecture/internal/config"
 	"github.com/primestrider/golang-clean-architecture/internal/observability"
+	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -44,7 +46,12 @@ func NewWebApp(t testing.TB, opts ...Option) *TestApp {
 		opt(cfg)
 	}
 
+	// Log aplikasi dibuang agar output test bersih. Set GCA_TEST_LOG=1 untuk
+	// menampilkannya saat men-debug test yang gagal.
 	log := slog.New(slog.DiscardHandler)
+	if os.Getenv("GCA_TEST_LOG") == "1" {
+		log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	}
 	_, err = config.NewTracerProvider(context.Background(), cfg)
 	require.NoError(t, err)
 	db, err := config.NewDatabase(cfg, log)
@@ -61,8 +68,14 @@ func NewWebApp(t testing.TB, opts ...Option) *TestApp {
 	if redisClient != nil {
 		t.Cleanup(func() { _ = redisClient.Close() })
 	}
+	var objectStorage usecase.ObjectStorage
+	if s, err := config.NewStorage(cfg); err == nil && s != nil {
+		objectStorage = s
+	} else {
+		require.NoError(t, err)
+	}
 	app := config.NewFiber(cfg, log)
-	config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics, Redis: redisClient})
+	config.BootstrapWeb(&config.WebDeps{Config: cfg, Log: log, DB: db, App: app, Metrics: metrics, Redis: redisClient, Storage: objectStorage})
 	return &TestApp{App: app, DB: db, Cfg: cfg, Metrics: metrics}
 }
 

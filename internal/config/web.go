@@ -31,6 +31,8 @@ type WebDeps struct {
 	// Redis opsional (nil bila dimatikan): dipakai untuk cache dan storage
 	// rate limiter bersama antar instance.
 	Redis *redis.Client
+	// Storage opsional (nil bila dimatikan) untuk avatar.
+	Storage usecase.ObjectStorage
 }
 
 // BootstrapWeb merangkai seluruh aplikasi web: repository, use case,
@@ -76,12 +78,21 @@ func BootstrapWeb(deps *WebDeps) {
 	adminUseCase := usecase.NewAdminUseCase(deps.Log, validate, tx, userRepository, events, audit)
 	addressUseCase := usecase.NewAddressUseCase(deps.Log, validate, tx, contactRepository, addressRepository, events, audit)
 
+	// Avatar hanya tersedia bila object storage aktif.
+	var avatarController *http.AvatarController
+	if deps.Storage != nil {
+		avatarUseCase := usecase.NewAvatarUseCase(deps.Log, tx, userRepository, deps.Storage, deps.Config.Storage.PresignTTL)
+		userUseCase.UseAvatarURLs(avatarUseCase)
+		avatarController = http.NewAvatarController(avatarUseCase)
+	}
+
 	// Delivery: middleware global, lalu controller dan route.
 	middleware.Apply(deps.App, middleware.StackConfig{
 		CORSOrigins:     deps.Config.Server.CORSOrigins,
 		RequestTimeout:  deps.Config.Server.RequestTimeout,
 		GlobalPerMinute: deps.Config.RateLimit.GlobalPerMinute,
 		Storage:         limiterStorage,
+		JSONBodyLimit:   deps.Config.Server.BodyLimit,
 		// Tracing lebih dulu supaya span mencakup seluruh pemrosesan request.
 		// Filter pencarian di query string adalah data pribadi, jadi nilainya
 		// disamarkan di atribut span.
@@ -99,6 +110,7 @@ func BootstrapWeb(deps *WebDeps) {
 		ContactController:    http.NewContactController(contactUseCase),
 		AddressController:    http.NewAddressController(addressUseCase),
 		AdminController:      http.NewAdminController(adminUseCase),
+		AvatarController:     avatarController,
 		AuthMiddleware:       middleware.NewAuth(tokens),
 		AuthIPEmailRateLimit: middleware.NewRateLimiter(authLimit, time.Minute, middleware.IPAndEmailKey("auth-ip-email"), limiterStorage),
 		AuthIPRateLimit:      middleware.NewRateLimiter(deps.Config.RateLimit.AuthIPPerMinute, time.Minute, middleware.IPKey("auth-ip"), limiterStorage),
