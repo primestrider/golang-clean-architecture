@@ -87,3 +87,6 @@ func TestLocalDispatcher_RunsHandlersFromOutboxRow(t *testing.T) {
 	assert.Equal(t, e.EventID, got.EventID)
 	assert.JSONEq(t, `{"first_name":"Budi"}`, string(got.Data))
 }
+
+// discard mengembalikan logger yang membuang semua output.
+func discard() *slog.Logger { return slog.New(slog.DiscardHandler) }

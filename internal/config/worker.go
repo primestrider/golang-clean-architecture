@@ -10,10 +10,13 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/entity"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/go-co-op/gocron/v2"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/messaging"
 	"github.com/primestrider/golang-clean-architecture/internal/observability"
 	"github.com/primestrider/golang-clean-architecture/internal/outbox"
 	"github.com/primestrider/golang-clean-architecture/internal/repository"
+	"github.com/primestrider/golang-clean-architecture/internal/scheduler"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
@@ -24,6 +27,9 @@ type WorkerDeps struct {
 	DB     *gorm.DB
 	// Metrics mencatat metrik outbox dan consumer; wajib diisi.
 	Metrics *observability.Metrics
+	// Redis opsional (nil bila dimatikan): dipakai sebagai lock scheduler
+	// supaya job terjadwal hanya berjalan di satu replica.
+	Redis *redis.Client
 }
 
 // job adalah satu pekerjaan latar belakang yang berjalan sampai ctx batal.
@@ -55,6 +61,10 @@ func BootstrapWorker(deps *WorkerDeps) (*Worker, error) {
 
 	outboxRepo := repository.NewOutboxRepository(deps.DB)
 	registerOutboxGauges(deps.Metrics, outboxRepo)
+
+	if err := w.addScheduler(deps, outboxRepo); err != nil {
+		return nil, err
+	}
 	locker := outbox.NewMySQLLocker(deps.DB, "outbox_relay")
 
 	if !cfg.Kafka.Enabled {
@@ -153,4 +163,34 @@ func registerOutboxGauges(m *observability.Metrics, repo *repository.OutboxRepos
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "outbox_pending", Help: "Jumlah event outbox yang menunggu dikirim."}, count(entity.OutboxPending)),
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "outbox_failed", Help: "Jumlah event outbox yang diparkir karena gagal terus."}, count(entity.OutboxFailed)),
 	)
+}
+
+// addScheduler mendaftarkan scheduler job pembersihan sebagai pekerjaan
+// worker. Tanpa Redis, scheduler berjalan tanpa lock (aman bila hanya ada
+// satu replica worker).
+func (w *Worker) addScheduler(deps *WorkerDeps, outboxRepo *repository.OutboxRepository) error {
+	var locker gocron.Locker
+	if deps.Redis != nil {
+		locker = scheduler.NewRedisLocker(deps.Redis, 10*time.Minute)
+	} else {
+		deps.Log.Info("redis disabled, scheduler runs without distributed lock (single worker replica assumed)")
+	}
+	s, err := scheduler.New(scheduler.Options{
+		TokenCleanupCron:  deps.Config.Scheduler.TokenCleanupCron,
+		OutboxCleanupCron: deps.Config.Scheduler.OutboxCleanupCron,
+	}, locker, deps.Log, scheduler.Jobs{
+		RefreshTokens: repository.NewRefreshTokenRepository(deps.DB),
+		Outbox:        outboxRepo,
+		Processed:     repository.NewProcessedEventRepository(deps.DB),
+		Now:           time.Now,
+	})
+	if err != nil {
+		return err
+	}
+	w.jobs = append(w.jobs, job{name: "scheduler", run: func(ctx context.Context) error {
+		s.Start()
+		<-ctx.Done()
+		return s.Shutdown()
+	}})
+	return nil
 }

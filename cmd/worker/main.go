@@ -57,7 +57,12 @@ func run() error {
 	metrics := observability.NewMetrics(registry)
 	metrics.Register(collectors.NewDBStatsCollector(sqlDB, cfg.Database.Name))
 
-	worker, err := config.BootstrapWorker(&config.WorkerDeps{Config: cfg, Log: log, DB: db, Metrics: metrics})
+	redisClient, err := config.NewRedis(cfg)
+	if err != nil {
+		return err
+	}
+
+	worker, err := config.BootstrapWorker(&config.WorkerDeps{Config: cfg, Log: log, DB: db, Metrics: metrics, Redis: redisClient})
 	if err != nil {
 		return err
 	}
@@ -65,9 +70,11 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	adminServer := admin.NewServer(fmt.Sprintf(":%d", cfg.Admin.WorkerPort), log, map[string]admin.Check{
-		"db": sqlDB.PingContext,
-	})
+	checks := map[string]admin.Check{"db": sqlDB.PingContext}
+	if redisClient != nil {
+		checks["redis"] = func(ctx context.Context) error { return redisClient.Ping(ctx).Err() }
+	}
+	adminServer := admin.NewServer(fmt.Sprintf(":%d", cfg.Admin.WorkerPort), log, checks)
 	adminServer.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 	adminErr := make(chan error, 1)
 	go func() { adminErr <- adminServer.Start() }()
@@ -94,7 +101,12 @@ func run() error {
 		log.Warn("shutdown timeout reached before background jobs finished")
 	}
 
-	err = errors.Join(runErr, adminServer.Shutdown(shutdownCtx), worker.Close(), sqlDB.Close(), shutdownTracing(shutdownCtx))
+	errs := []error{runErr, adminServer.Shutdown(shutdownCtx), worker.Close()}
+	if redisClient != nil {
+		errs = append(errs, redisClient.Close())
+	}
+	errs = append(errs, sqlDB.Close(), shutdownTracing(shutdownCtx))
+	err = errors.Join(errs...)
 	log.Info("shutdown complete")
 	return err
 }
