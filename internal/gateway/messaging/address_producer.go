@@ -4,14 +4,14 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/model"
 
 	"github.com/IBM/sarama"
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 type AddressProducer struct {
 	Producer[*model.AddressEvent]
 }
 
-func NewAddressProducer(producer sarama.SyncProducer, log *logrus.Logger) *AddressProducer {
+func NewAddressProducer(producer sarama.SyncProducer, log *slog.Logger) *AddressProducer {
 	return &AddressProducer{
 		Producer: Producer[*model.AddressEvent]{
 			Producer: producer,

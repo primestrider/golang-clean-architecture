@@ -11,14 +11,14 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
+	"log/slog"
 )
 
 type BootstrapConfig struct {
 	DB       *gorm.DB
 	App      *fiber.App
-	Log      *logrus.Logger
+	Log      *slog.Logger
 	Validate *validator.Validate
 	Config   *Config
 	Producer sarama.SyncProducer

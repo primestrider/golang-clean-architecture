@@ -7,15 +7,15 @@ import (
 	"math"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 type ContactController struct {
 	UseCase *usecase.ContactUseCase
-	Log     *logrus.Logger
+	Log     *slog.Logger
 }
 
-func NewContactController(useCase *usecase.ContactUseCase, log *logrus.Logger) *ContactController {
+func NewContactController(useCase *usecase.ContactUseCase, log *slog.Logger) *ContactController {
 	return &ContactController{
 		UseCase: useCase,
 		Log:     log,
@@ -27,14 +27,14 @@ func (c *ContactController) Create(ctx fiber.Ctx) error {
 
 	request := new(model.CreateContactRequest)
 	if err := ctx.Bind().Body(request); err != nil {
-		c.Log.WithError(err).Error("error parsing request body")
+		c.Log.Error("error parsing request body", "error", err)
 		return fiber.ErrBadRequest
 	}
 	request.UserId = auth.ID
 
 	response, err := c.UseCase.Create(ctx.Context(), request)
 	if err != nil {
-		c.Log.WithError(err).Error("error creating contact")
+		c.Log.Error("error creating contact", "error", err)
 		return err
 	}
 
@@ -55,7 +55,7 @@ func (c *ContactController) List(ctx fiber.Ctx) error {
 
 	responses, total, err := c.UseCase.Search(ctx.Context(), request)
 	if err != nil {
-		c.Log.WithError(err).Error("error searching contact")
+		c.Log.Error("error searching contact", "error", err)
 		return err
 	}
 
@@ -82,7 +82,7 @@ func (c *ContactController) Get(ctx fiber.Ctx) error {
 
 	response, err := c.UseCase.Get(ctx.Context(), request)
 	if err != nil {
-		c.Log.WithError(err).Error("error getting contact")
+		c.Log.Error("error getting contact", "error", err)
 		return err
 	}
 
@@ -94,7 +94,7 @@ func (c *ContactController) Update(ctx fiber.Ctx) error {
 
 	request := new(model.UpdateContactRequest)
 	if err := ctx.Bind().Body(request); err != nil {
-		c.Log.WithError(err).Error("error parsing request body")
+		c.Log.Error("error parsing request body", "error", err)
 		return fiber.ErrBadRequest
 	}
 
@@ -103,7 +103,7 @@ func (c *ContactController) Update(ctx fiber.Ctx) error {
 
 	response, err := c.UseCase.Update(ctx.Context(), request)
 	if err != nil {
-		c.Log.WithError(err).Error("error updating contact")
+		c.Log.Error("error updating contact", "error", err)
 		return err
 	}
 
@@ -120,7 +120,7 @@ func (c *ContactController) Delete(ctx fiber.Ctx) error {
 	}
 
 	if err := c.UseCase.Delete(ctx.Context(), request); err != nil {
-		c.Log.WithError(err).Error("error deleting contact")
+		c.Log.Error("error deleting contact", "error", err)
 		return err
 	}
 

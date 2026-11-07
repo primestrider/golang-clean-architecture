@@ -5,8 +5,8 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
+	"log/slog"
 )
 
 var app *fiber.App
@@ -15,7 +15,7 @@ var db *gorm.DB
 
 var viperConfig *config.Config
 
-var log *logrus.Logger
+var log *slog.Logger
 
 var validate *validator.Validate
 
@@ -28,8 +28,14 @@ func init() {
 	log = config.NewLogger(viperConfig)
 	validate = config.NewValidator(viperConfig)
 	app = config.NewFiber(viperConfig)
-	db = config.NewDatabase(viperConfig, log)
-	producer := config.NewKafkaProducer(viperConfig, log)
+	db, err = config.NewDatabase(viperConfig, log)
+	if err != nil {
+		panic(err)
+	}
+	producer, err := config.NewKafkaProducer(viperConfig, log)
+	if err != nil {
+		panic(err)
+	}
 
 	config.Bootstrap(&config.BootstrapConfig{
 		DB:       db,

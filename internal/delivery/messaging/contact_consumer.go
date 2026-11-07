@@ -5,14 +5,14 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/model"
 
 	"github.com/IBM/sarama"
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 type ContactConsumer struct {
-	Log *logrus.Logger
+	Log *slog.Logger
 }
 
-func NewContactConsumer(log *logrus.Logger) *ContactConsumer {
+func NewContactConsumer(log *slog.Logger) *ContactConsumer {
 	return &ContactConsumer{
 		Log: log,
 	}
@@ -21,11 +21,11 @@ func NewContactConsumer(log *logrus.Logger) *ContactConsumer {
 func (c ContactConsumer) Consume(message *sarama.ConsumerMessage) error {
 	ContactEvent := new(model.ContactEvent)
 	if err := json.Unmarshal(message.Value, ContactEvent); err != nil {
-		c.Log.WithError(err).Error("error unmarshalling Contact event")
+		c.Log.Error("error unmarshalling Contact event", "error", err)
 		return err
 	}
 
 	// TODO process event
-	c.Log.Infof("Received topic contacts with event: %v from partition %d", ContactEvent, message.Partition)
+	c.Log.Info("received event", "topic", "contacts", "event", ContactEvent, "partition", message.Partition)
 	return nil
 }

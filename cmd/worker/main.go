@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 func main() {
@@ -33,7 +33,7 @@ func main() {
 	for !stop {
 		select {
 		case s := <-terminateSignals:
-			logger.Info("Got one of stop signals, shutting down worker gracefully, SIGNAL NAME :", s)
+			logger.Info("shutdown signal received", "signal", s.String())
 			cancel()
 			stop = true
 		}
@@ -42,23 +42,35 @@ func main() {
 	time.Sleep(5 * time.Second) // wait for all consumers to finish processing
 }
 
-func RunAddressConsumer(logger *logrus.Logger, viperConfig *config.Config, ctx context.Context) {
+func RunAddressConsumer(logger *slog.Logger, viperConfig *config.Config, ctx context.Context) {
 	logger.Info("setup address consumer")
-	addressConsumerGroup := config.NewKafkaConsumerGroup(viperConfig, logger)
+	addressConsumerGroup, err := config.NewKafkaConsumerGroup(viperConfig)
+	if err != nil {
+		logger.Error("create consumer group failed", "error", err)
+		return
+	}
 	addressHandler := messaging.NewAddressConsumer(logger)
 	messaging.ConsumeTopic(ctx, addressConsumerGroup, "addresses", logger, addressHandler.Consume)
 }
 
-func RunContactConsumer(logger *logrus.Logger, viperConfig *config.Config, ctx context.Context) {
+func RunContactConsumer(logger *slog.Logger, viperConfig *config.Config, ctx context.Context) {
 	logger.Info("setup contact consumer")
-	contactConsumerGroup := config.NewKafkaConsumerGroup(viperConfig, logger)
+	contactConsumerGroup, err := config.NewKafkaConsumerGroup(viperConfig)
+	if err != nil {
+		logger.Error("create consumer group failed", "error", err)
+		return
+	}
 	contactHandler := messaging.NewContactConsumer(logger)
 	messaging.ConsumeTopic(ctx, contactConsumerGroup, "contacts", logger, contactHandler.Consume)
 }
 
-func RunUserConsumer(logger *logrus.Logger, viperConfig *config.Config, ctx context.Context) {
+func RunUserConsumer(logger *slog.Logger, viperConfig *config.Config, ctx context.Context) {
 	logger.Info("setup user consumer")
-	userConsumerGroup := config.NewKafkaConsumerGroup(viperConfig, logger)
+	userConsumerGroup, err := config.NewKafkaConsumerGroup(viperConfig)
+	if err != nil {
+		logger.Error("create consumer group failed", "error", err)
+		return
+	}
 	userHandler := messaging.NewUserConsumer(logger)
 	messaging.ConsumeTopic(ctx, userConsumerGroup, "users", logger, userHandler.Consume)
 }

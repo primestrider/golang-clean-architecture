@@ -5,13 +5,13 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/model"
 
 	"github.com/IBM/sarama"
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 type Producer[T model.Event] struct {
 	Producer sarama.SyncProducer
 	Topic    string
-	Log      *logrus.Logger
+	Log      *slog.Logger
 }
 
 func (p *Producer[T]) GetTopic() *string {
@@ -21,7 +21,7 @@ func (p *Producer[T]) GetTopic() *string {
 func (p *Producer[T]) Send(event T) error {
 	value, err := json.Marshal(event)
 	if err != nil {
-		p.Log.WithError(err).Error("failed to marshal event")
+		p.Log.Error("failed to marshal event", "error", err)
 		return err
 	}
 
@@ -33,10 +33,10 @@ func (p *Producer[T]) Send(event T) error {
 
 	partition, offset, err := p.Producer.SendMessage(message)
 	if err != nil {
-		p.Log.WithError(err).Error("failed to produce message")
+		p.Log.Error("failed to produce message", "error", err)
 		return err
 	}
 
-	p.Log.Debugf("Message sent to topic %s, partition %d, offset %d", p.Topic, partition, offset)
+	p.Log.Debug("message sent", "topic", p.Topic, "partition", partition, "offset", offset)
 	return nil
 }

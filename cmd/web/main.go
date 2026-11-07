@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/primestrider/golang-clean-architecture/internal/config"
+	"os"
 )
 
 func main() {
@@ -11,10 +12,18 @@ func main() {
 		panic(err)
 	}
 	log := config.NewLogger(viperConfig)
-	db := config.NewDatabase(viperConfig, log)
+	db, err := config.NewDatabase(viperConfig, log)
+	if err != nil {
+		log.Error("startup failed", "error", err)
+		os.Exit(1)
+	}
 	validate := config.NewValidator(viperConfig)
 	app := config.NewFiber(viperConfig)
-	producer := config.NewKafkaProducer(viperConfig, log)
+	producer, err := config.NewKafkaProducer(viperConfig, log)
+	if err != nil {
+		log.Error("startup failed", "error", err)
+		os.Exit(1)
+	}
 
 	config.Bootstrap(&config.BootstrapConfig{
 		DB:       db,
@@ -28,6 +37,7 @@ func main() {
 	webPort := viperConfig.Server.Port
 	err = app.Listen(fmt.Sprintf(":%d", webPort))
 	if err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		log.Error("server stopped", "error", err)
+		os.Exit(1)
 	}
 }

@@ -11,20 +11,20 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
+	"log/slog"
 )
 
 type AddressUseCase struct {
 	DB                *gorm.DB
-	Log               *logrus.Logger
+	Log               *slog.Logger
 	Validate          *validator.Validate
 	AddressRepository *repository.AddressRepository
 	ContactRepository *repository.ContactRepository
 	AddressProducer   *messaging.AddressProducer
 }
 
-func NewAddressUseCase(db *gorm.DB, logger *logrus.Logger, validate *validator.Validate,
+func NewAddressUseCase(db *gorm.DB, logger *slog.Logger, validate *validator.Validate,
 	contactRepository *repository.ContactRepository, addressRepository *repository.AddressRepository,
 	addressProducer *messaging.AddressProducer) *AddressUseCase {
 	return &AddressUseCase{
@@ -42,13 +42,13 @@ func (c *AddressUseCase) Create(ctx context.Context, request *model.CreateAddres
 	defer tx.Rollback()
 
 	if err := c.Validate.Struct(request); err != nil {
-		c.Log.WithError(err).Error("failed to validate request body")
+		c.Log.Error("failed to validate request body", "error", err)
 		return nil, fiber.ErrBadRequest
 	}
 
 	contact := new(entity.Contact)
 	if err := c.ContactRepository.FindByIdAndUserId(tx, contact, request.ContactId, request.UserId); err != nil {
-		c.Log.WithError(err).Error("failed to find contact")
+		c.Log.Error("failed to find contact", "error", err)
 		return nil, fiber.ErrNotFound
 	}
 
@@ -63,19 +63,19 @@ func (c *AddressUseCase) Create(ctx context.Context, request *model.CreateAddres
 	}
 
 	if err := c.AddressRepository.Create(tx, address); err != nil {
-		c.Log.WithError(err).Error("failed to create address")
+		c.Log.Error("failed to create address", "error", err)
 		return nil, fiber.ErrInternalServerError
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		c.Log.WithError(err).Error("failed to commit transaction")
+		c.Log.Error("failed to commit transaction", "error", err)
 		return nil, fiber.ErrInternalServerError
 	}
 
 	if c.AddressProducer != nil {
 		event := converter.AddressToEvent(address)
 		if err := c.AddressProducer.Send(event); err != nil {
-			c.Log.WithError(err).Error("failed to publish address created event")
+			c.Log.Error("failed to publish address created event", "error", err)
 			return nil, fiber.ErrInternalServerError
 		}
 		c.Log.Info("Published address created event")
@@ -91,19 +91,19 @@ func (c *AddressUseCase) Update(ctx context.Context, request *model.UpdateAddres
 	defer tx.Rollback()
 
 	if err := c.Validate.Struct(request); err != nil {
-		c.Log.WithError(err).Error("failed to validate request body")
+		c.Log.Error("failed to validate request body", "error", err)
 		return nil, fiber.ErrBadRequest
 	}
 
 	contact := new(entity.Contact)
 	if err := c.ContactRepository.FindByIdAndUserId(tx, contact, request.ContactId, request.UserId); err != nil {
-		c.Log.WithError(err).Error("failed to find contact")
+		c.Log.Error("failed to find contact", "error", err)
 		return nil, fiber.ErrNotFound
 	}
 
 	address := new(entity.Address)
 	if err := c.AddressRepository.FindByIdAndContactId(tx, address, request.ID, contact.ID); err != nil {
-		c.Log.WithError(err).Error("failed to find address")
+		c.Log.Error("failed to find address", "error", err)
 		return nil, fiber.ErrNotFound
 	}
 
@@ -114,19 +114,19 @@ func (c *AddressUseCase) Update(ctx context.Context, request *model.UpdateAddres
 	address.Country = request.Country
 
 	if err := c.AddressRepository.Update(tx, address); err != nil {
-		c.Log.WithError(err).Error("failed to update address")
+		c.Log.Error("failed to update address", "error", err)
 		return nil, fiber.ErrInternalServerError
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		c.Log.WithError(err).Error("failed to commit transaction")
+		c.Log.Error("failed to commit transaction", "error", err)
 		return nil, fiber.ErrInternalServerError
 	}
 
 	if c.AddressProducer != nil {
 		event := converter.AddressToEvent(address)
 		if err := c.AddressProducer.Send(event); err != nil {
-			c.Log.WithError(err).Error("failed to publish address updated event")
+			c.Log.Error("failed to publish address updated event", "error", err)
 			return nil, fiber.ErrInternalServerError
 		}
 		c.Log.Info("Published address updated event")
@@ -143,18 +143,18 @@ func (c *AddressUseCase) Get(ctx context.Context, request *model.GetAddressReque
 
 	contact := new(entity.Contact)
 	if err := c.ContactRepository.FindByIdAndUserId(tx, contact, request.ContactId, request.UserId); err != nil {
-		c.Log.WithError(err).Error("failed to find contact")
+		c.Log.Error("failed to find contact", "error", err)
 		return nil, fiber.ErrNotFound
 	}
 
 	address := new(entity.Address)
 	if err := c.AddressRepository.FindByIdAndContactId(tx, address, request.ID, request.ContactId); err != nil {
-		c.Log.WithError(err).Error("failed to find address")
+		c.Log.Error("failed to find address", "error", err)
 		return nil, fiber.ErrNotFound
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		c.Log.WithError(err).Error("failed to commit transaction")
+		c.Log.Error("failed to commit transaction", "error", err)
 		return nil, fiber.ErrInternalServerError
 	}
 
@@ -167,23 +167,23 @@ func (c *AddressUseCase) Delete(ctx context.Context, request *model.DeleteAddres
 
 	contact := new(entity.Contact)
 	if err := c.ContactRepository.FindByIdAndUserId(tx, contact, request.ContactId, request.UserId); err != nil {
-		c.Log.WithError(err).Error("failed to find contact")
+		c.Log.Error("failed to find contact", "error", err)
 		return fiber.ErrNotFound
 	}
 
 	address := new(entity.Address)
 	if err := c.AddressRepository.FindByIdAndContactId(tx, address, request.ID, request.ContactId); err != nil {
-		c.Log.WithError(err).Error("failed to find address")
+		c.Log.Error("failed to find address", "error", err)
 		return fiber.ErrNotFound
 	}
 
 	if err := c.AddressRepository.Delete(tx, address); err != nil {
-		c.Log.WithError(err).Error("failed to delete address")
+		c.Log.Error("failed to delete address", "error", err)
 		return fiber.ErrInternalServerError
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		c.Log.WithError(err).Error("failed to commit transaction")
+		c.Log.Error("failed to commit transaction", "error", err)
 		return fiber.ErrInternalServerError
 	}
 
@@ -196,18 +196,18 @@ func (c *AddressUseCase) List(ctx context.Context, request *model.ListAddressReq
 
 	contact := new(entity.Contact)
 	if err := c.ContactRepository.FindByIdAndUserId(tx, contact, request.ContactId, request.UserId); err != nil {
-		c.Log.WithError(err).Error("failed to find contact")
+		c.Log.Error("failed to find contact", "error", err)
 		return nil, fiber.ErrNotFound
 	}
 
 	addresses, err := c.AddressRepository.FindAllByContactId(tx, contact.ID)
 	if err != nil {
-		c.Log.WithError(err).Error("failed to find addresses")
+		c.Log.Error("failed to find addresses", "error", err)
 		return nil, fiber.ErrInternalServerError
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		c.Log.WithError(err).Error("failed to commit transaction")
+		c.Log.Error("failed to commit transaction", "error", err)
 		return nil, fiber.ErrInternalServerError
 	}
 

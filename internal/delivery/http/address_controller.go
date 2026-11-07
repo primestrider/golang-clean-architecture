@@ -6,15 +6,15 @@ import (
 	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 type AddressController struct {
 	UseCase *usecase.AddressUseCase
-	Log     *logrus.Logger
+	Log     *slog.Logger
 }
 
-func NewAddressController(useCase *usecase.AddressUseCase, log *logrus.Logger) *AddressController {
+func NewAddressController(useCase *usecase.AddressUseCase, log *slog.Logger) *AddressController {
 	return &AddressController{
 		Log:     log,
 		UseCase: useCase,
@@ -26,7 +26,7 @@ func (c *AddressController) Create(ctx fiber.Ctx) error {
 
 	request := new(model.CreateAddressRequest)
 	if err := ctx.Bind().Body(request); err != nil {
-		c.Log.WithError(err).Error("failed to parse request body")
+		c.Log.Error("failed to parse request body", "error", err)
 		return fiber.ErrBadRequest
 	}
 
@@ -35,7 +35,7 @@ func (c *AddressController) Create(ctx fiber.Ctx) error {
 
 	response, err := c.UseCase.Create(ctx.Context(), request)
 	if err != nil {
-		c.Log.WithError(err).Error("failed to create address")
+		c.Log.Error("failed to create address", "error", err)
 		return err
 	}
 
@@ -53,7 +53,7 @@ func (c *AddressController) List(ctx fiber.Ctx) error {
 
 	responses, err := c.UseCase.List(ctx.Context(), request)
 	if err != nil {
-		c.Log.WithError(err).Error("failed to list addresses")
+		c.Log.Error("failed to list addresses", "error", err)
 		return err
 	}
 
@@ -73,7 +73,7 @@ func (c *AddressController) Get(ctx fiber.Ctx) error {
 
 	response, err := c.UseCase.Get(ctx.Context(), request)
 	if err != nil {
-		c.Log.WithError(err).Error("failed to get address")
+		c.Log.Error("failed to get address", "error", err)
 		return err
 	}
 
@@ -85,7 +85,7 @@ func (c *AddressController) Update(ctx fiber.Ctx) error {
 
 	request := new(model.UpdateAddressRequest)
 	if err := ctx.Bind().Body(request); err != nil {
-		c.Log.WithError(err).Error("failed to parse request body")
+		c.Log.Error("failed to parse request body", "error", err)
 		return fiber.ErrBadRequest
 	}
 
@@ -95,7 +95,7 @@ func (c *AddressController) Update(ctx fiber.Ctx) error {
 
 	response, err := c.UseCase.Update(ctx.Context(), request)
 	if err != nil {
-		c.Log.WithError(err).Error("failed to update address")
+		c.Log.Error("failed to update address", "error", err)
 		return err
 	}
 
@@ -114,7 +114,7 @@ func (c *AddressController) Delete(ctx fiber.Ctx) error {
 	}
 
 	if err := c.UseCase.Delete(ctx.Context(), request); err != nil {
-		c.Log.WithError(err).Error("failed to delete address")
+		c.Log.Error("failed to delete address", "error", err)
 		return err
 	}
 
