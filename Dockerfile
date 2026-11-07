@@ -25,6 +25,12 @@ WORKDIR /app
 COPY --from=build /out/ /app/
 COPY config.json /app/config.json
 
+# Image default berjalan sebagai production. Validasi config akan menolak
+# start bila APP_JWT_SECRET tidak diisi dengan secret sungguhan (secret dev
+# bawaan config.json ditolak) dan bila Swagger UI masih aktif. Untuk
+# development (docker-compose), APP_APP_ENV ditimpa lewat deploy/*.env.
+ENV APP_APP_ENV=production     APP_DOCS_ENABLED=false     APP_LOG_FORMAT=json     APP_LOG_LEVEL=info
+
 # Jalankan sebagai user non-root.
 USER nonroot:nonroot
 EXPOSE 3000 9090 9091 50051
