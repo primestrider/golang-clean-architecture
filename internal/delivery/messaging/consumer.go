@@ -5,31 +5,24 @@ import (
 	"log/slog"
 
 	"github.com/IBM/sarama"
+	"github.com/primestrider/golang-clean-architecture/internal/model"
 )
 
-// ConsumerHandler memproses satu pesan Kafka. Mengembalikan error berarti
-// pesan gagal diproses dan offset-nya tidak di-commit.
-type ConsumerHandler func(message *sarama.ConsumerMessage) error
-
-// NewLoggingHandler membuat handler yang hanya mencatat pesan ke log.
-// Berguna sebagai contoh dan untuk memastikan alur consumer berjalan.
-func NewLoggingHandler(log *slog.Logger) ConsumerHandler {
-	return func(message *sarama.ConsumerMessage) error {
-		log.Info("received event",
-			"topic", message.Topic,
-			"partition", message.Partition,
-			"offset", message.Offset,
-			"key", string(message.Key),
-		)
+// NewLoggingHandler membuat handler yang hanya mencatat event ke log.
+// Didaftarkan untuk semua event sebagai contoh dan alat bantu debug.
+func NewLoggingHandler(log *slog.Logger) Handler {
+	return func(ctx context.Context, e model.Event) error {
+		log.InfoContext(ctx, "event received",
+			"event_id", e.EventID, "event_type", e.EventType, "aggregate_id", e.AggregateID)
 		return nil
 	}
 }
 
-// consumerGroupHandler menghubungkan ConsumerHandler ke antarmuka
+// consumerGroupHandler menghubungkan Processor ke antarmuka
 // sarama.ConsumerGroupHandler.
 type consumerGroupHandler struct {
-	handler ConsumerHandler
-	log     *slog.Logger
+	processor *Processor
+	log       *slog.Logger
 }
 
 // Setup dipanggil sarama saat sesi consumer group dimulai.
@@ -38,47 +31,49 @@ func (h *consumerGroupHandler) Setup(sarama.ConsumerGroupSession) error { return
 // Cleanup dipanggil sarama saat sesi consumer group berakhir.
 func (h *consumerGroupHandler) Cleanup(sarama.ConsumerGroupSession) error { return nil }
 
-// ConsumeClaim membaca pesan dari satu partisi. Offset hanya ditandai
-// (MarkMessage) bila pesan berhasil diproses.
+// ConsumeClaim membaca pesan dari satu partisi secara berurutan. Offset
+// ditandai hanya setelah pesan selesai ditangani (berhasil atau masuk DLQ).
+// Bila pesan bahkan gagal dipindah ke DLQ, sesi dihentikan supaya pesan itu
+// dibaca ulang alih-alih hilang.
 func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for {
 		select {
-		case message, ok := <-claim.Messages():
+		case msg, ok := <-claim.Messages():
 			if !ok {
 				return nil
 			}
-			if err := h.handler(message); err != nil {
-				h.log.Error("failed to process message", "topic", message.Topic, "error", err)
-				continue
+			if err := h.processor.Process(session.Context(), msg); err != nil {
+				h.log.Error("message not handled, will be redelivered", "topic", msg.Topic, "offset", msg.Offset, "error", err)
+				return err
 			}
-			session.MarkMessage(message, "")
+			session.MarkMessage(msg, "")
 		case <-session.Context().Done():
 			return nil
 		}
 	}
 }
 
-// ConsumeTopic mengonsumsi satu topik sampai ctx dibatalkan, lalu menutup
+// ConsumeTopics mengonsumsi topik-topik sampai ctx dibatalkan, lalu menutup
 // consumer group. Fungsi ini memblokir, jadi jalankan di goroutine sendiri.
-func ConsumeTopic(ctx context.Context, group sarama.ConsumerGroup, topic string, log *slog.Logger, handler ConsumerHandler) {
-	h := &consumerGroupHandler{handler: handler, log: log}
+func ConsumeTopics(ctx context.Context, group sarama.ConsumerGroup, topics []string, processor *Processor, log *slog.Logger) {
+	h := &consumerGroupHandler{processor: processor, log: log}
 
 	go func() {
 		for err := range group.Errors() {
-			log.Error("consumer group error", "topic", topic, "error", err)
+			log.Error("consumer group error", "error", err)
 		}
 	}()
 
 	// Consume perlu dipanggil ulang dalam loop: ia kembali setiap kali
 	// terjadi rebalance consumer group.
 	for ctx.Err() == nil {
-		if err := group.Consume(ctx, []string{topic}, h); err != nil {
-			log.Error("consume failed", "topic", topic, "error", err)
+		if err := group.Consume(ctx, topics, h); err != nil {
+			log.Error("consume failed", "topics", topics, "error", err)
 		}
 	}
 
-	log.Info("closing consumer group", "topic", topic)
+	log.Info("closing consumer group", "topics", topics)
 	if err := group.Close(); err != nil {
-		log.Error("close consumer group failed", "topic", topic, "error", err)
+		log.Error("close consumer group failed", "error", err)
 	}
 }

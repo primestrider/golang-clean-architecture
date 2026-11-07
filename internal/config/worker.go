@@ -34,16 +34,25 @@ type Worker struct {
 }
 
 // BootstrapWorker merangkai pekerjaan worker:
-//   - outbox relay: mengirim event dari tabel outbox ke Kafka;
-//   - consumer Kafka untuk setiap topik.
-//
-// Bila Kafka dimatikan, relay dan consumer Kafka tidak dijalankan.
+//   - registry handler event (idempoten lewat tabel processed_events);
+//   - outbox relay yang selalu berjalan. Bila Kafka aktif, relay mengirim
+//     event ke Kafka dan consumer Kafka meneruskannya ke registry. Bila Kafka
+//     mati, relay langsung memanggil registry di proses ini (mode minimal).
 func BootstrapWorker(deps *WorkerDeps) (*Worker, error) {
 	w := &Worker{log: deps.Log}
 	cfg := deps.Config
 
+	registry := messaging.NewRegistry(repository.NewTransactor(deps.DB),
+		repository.NewProcessedEventRepository(deps.DB), deps.Log)
+	registerHandlers(registry, deps)
+
+	outboxRepo := repository.NewOutboxRepository(deps.DB)
+	locker := outbox.NewMySQLLocker(deps.DB, "outbox_relay")
+
 	if !cfg.Kafka.Enabled {
-		deps.Log.Info("kafka disabled, outbox relay and kafka consumers not started")
+		deps.Log.Info("kafka disabled, outbox events are dispatched to local handlers")
+		relay := outbox.NewRelay(outboxRepo, messaging.NewLocalDispatcher(registry), locker, outboxOptions(cfg.Outbox), deps.Log)
+		w.jobs = append(w.jobs, job{name: "outbox-relay", run: relay.Run})
 		return w, nil
 	}
 
@@ -53,22 +62,27 @@ func BootstrapWorker(deps *WorkerDeps) (*Worker, error) {
 	}
 	w.closers = append(w.closers, producer.Close)
 
-	relay := outbox.NewRelay(repository.NewOutboxRepository(deps.DB), outbox.NewKafkaDispatcher(producer),
-		outbox.NewMySQLLocker(deps.DB, "outbox_relay"), outboxOptions(cfg.Outbox), deps.Log)
+	relay := outbox.NewRelay(outboxRepo, outbox.NewKafkaDispatcher(producer), locker, outboxOptions(cfg.Outbox), deps.Log)
 	w.jobs = append(w.jobs, job{name: "outbox-relay", run: relay.Run})
 
-	handler := messaging.NewLoggingHandler(deps.Log)
-	for _, topic := range []string{"users", "contacts", "addresses"} {
-		group, err := NewKafkaConsumerGroup(cfg)
-		if err != nil {
-			return nil, errors.Join(err, w.Close())
-		}
-		w.jobs = append(w.jobs, job{name: "consumer-" + topic, run: func(ctx context.Context) error {
-			messaging.ConsumeTopic(ctx, group, topic, deps.Log, handler)
-			return nil
-		}})
+	group, err := NewKafkaConsumerGroup(cfg)
+	if err != nil {
+		return nil, errors.Join(err, w.Close())
 	}
+	processor := messaging.NewProcessor(registry, producer, cfg.Consumer.MaxRetries, cfg.Consumer.InitialBackoff, deps.Log)
+	topics := registry.Topics()
+	w.jobs = append(w.jobs, job{name: "kafka-consumer", run: func(ctx context.Context) error {
+		messaging.ConsumeTopics(ctx, group, topics, processor, deps.Log)
+		return nil
+	}})
 	return w, nil
+}
+
+// registerHandlers mendaftarkan semua handler event. Tambahkan handler baru
+// di sini: nama consumer harus unik dan tidak boleh diganti setelah dipakai,
+// karena menjadi kunci idempotency.
+func registerHandlers(registry *messaging.Registry, deps *WorkerDeps) {
+	registry.Register("event-logger", messaging.AnyEvent, messaging.NewLoggingHandler(deps.Log))
 }
 
 // Run menjalankan semua pekerjaan dan memblokir sampai semuanya berhenti
