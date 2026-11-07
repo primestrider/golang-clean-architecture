@@ -2,7 +2,7 @@
 # Di Windows, jalankan lewat Git Bash atau WSL. Perintah aslinya juga
 # tercantum di README untuk pengguna PowerShell.
 
-.PHONY: help tools build test test-integration lint vuln mocks
+.PHONY: help tools build test test-integration lint vuln mocks create-admin
 
 help: ## Tampilkan daftar target
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -29,3 +29,6 @@ vuln: ## Periksa kerentanan dependency yang benar-benar terpanggil
 
 mocks: ## Generate ulang mock dari interface di internal/usecase/ports.go
 	mockery
+
+create-admin: ## Jadikan user sebagai admin, contoh: make create-admin EMAIL=admin@example.com
+	go run ./cmd/cli create-admin --email $(EMAIL)

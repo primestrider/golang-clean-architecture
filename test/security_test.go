@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -77,13 +78,16 @@ func TestLoginRateLimit_SixthAttempt429WithRetryAfter(t *testing.T) {
 // tidak bisa dipakai untuk mengakali rate limit.
 func TestRateLimit_IgnoresSpoofedXForwardedFor(t *testing.T) {
 	app := testsupport.NewWebApp(t)
-	body := `{"email":"eko@example.com","password":"salahsalah"}`
 
+	// Email berbeda di setiap request, sehingga hanya limiter per IP yang
+	// bisa menghentikannya. Bila X-Forwarded-For palsu dipercaya, setiap
+	// request akan terlihat datang dari IP berbeda dan tidak pernah dibatasi.
 	var last *http.Response
-	for i := range 6 {
+	for i := range app.Cfg.RateLimit.AuthIPPerMinute + 1 {
+		body := `{"email":"user` + strconv.Itoa(i) + `@example.com","password":"salahsalah"}`
 		last, _ = rawRequest(t, app, http.MethodPost, "/api/v1/auth/login", body, map[string]string{
 			"Content-Type":    "application/json",
-			"X-Forwarded-For": "10.0.0." + string(rune('1'+i)),
+			"X-Forwarded-For": "10.0.0." + strconv.Itoa(i),
 		})
 	}
 
@@ -189,4 +193,19 @@ func TestCORS_AllowsConfiguredOriginOnly(t *testing.T) {
 
 	assert.Equal(t, "http://localhost:5173", allowed.Header.Get("Access-Control-Allow-Origin"))
 	assert.Empty(t, denied.Header.Get("Access-Control-Allow-Origin"))
+}
+
+// TestLoginRateLimit_PerIPAcrossDifferentEmails: satu IP yang mencoba banyak
+// email berbeda (credential stuffing) tetap dibatasi oleh limiter per IP.
+func TestLoginRateLimit_PerIPAcrossDifferentEmails(t *testing.T) {
+	app := testsupport.NewWebApp(t)
+	limit := app.Cfg.RateLimit.AuthIPPerMinute
+
+	var last *http.Response
+	for i := range limit + 1 {
+		last, _ = app.Do(t, http.MethodPost, "/api/v1/auth/login",
+			model.LoginRequest{Email: "user" + strconv.Itoa(i) + "@example.com", Password: "salahsalah"}, "")
+	}
+
+	assert.Equal(t, http.StatusTooManyRequests, last.StatusCode)
 }

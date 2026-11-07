@@ -53,6 +53,7 @@ func BootstrapWeb(deps *WebDeps) {
 		Issuer:     tokens,
 		RefreshTTL: deps.Config.JWT.RefreshTTL,
 	})
+	adminUseCase := usecase.NewAdminUseCase(deps.Log, validate, tx, userRepository, events)
 	addressUseCase := usecase.NewAddressUseCase(deps.Log, validate, tx, contactRepository, addressRepository, events)
 
 	// Delivery: middleware global, lalu controller dan route.
@@ -64,14 +65,16 @@ func BootstrapWeb(deps *WebDeps) {
 
 	authLimit := deps.Config.RateLimit.AuthPerMinute
 	routes := route.RouteConfig{
-		App:               deps.App,
-		AuthController:    http.NewAuthController(authUseCase),
-		UserController:    http.NewUserController(userUseCase),
-		ContactController: http.NewContactController(contactUseCase),
-		AddressController: http.NewAddressController(addressUseCase),
-		AuthMiddleware:    middleware.NewAuth(tokens),
-		AuthRateLimit:     middleware.NewRateLimiter(authLimit, time.Minute, middleware.IPAndEmailKey("auth"), nil),
-		RefreshRateLimit:  middleware.NewRateLimiter(authLimit, time.Minute, middleware.IPKey("refresh"), nil),
+		App:                deps.App,
+		AuthController:     http.NewAuthController(authUseCase),
+		UserController:     http.NewUserController(userUseCase),
+		ContactController:  http.NewContactController(contactUseCase),
+		AddressController:  http.NewAddressController(addressUseCase),
+		AdminController:    http.NewAdminController(adminUseCase),
+		AuthMiddleware:     middleware.NewAuth(tokens),
+		AuthEmailRateLimit: middleware.NewRateLimiter(authLimit, time.Minute, middleware.EmailKey("auth-email"), nil),
+		AuthIPRateLimit:    middleware.NewRateLimiter(deps.Config.RateLimit.AuthIPPerMinute, time.Minute, middleware.IPKey("auth-ip"), nil),
+		RefreshRateLimit:   middleware.NewRateLimiter(authLimit, time.Minute, middleware.IPKey("refresh"), nil),
 	}
 	routes.Setup()
 }

@@ -29,17 +29,15 @@ func NewRateLimiter(maxRequests int, window time.Duration, key func(fiber.Ctx) s
 	})
 }
 
-// IPAndEmailKey membuat key rate limit dari IP client dan email di body
-// JSON. Dipakai untuk endpoint login dan registrasi, supaya percobaan
-// menebak password satu akun dibatasi walau penyerang berganti-ganti akun,
-// dan sebaliknya.
-func IPAndEmailKey(prefix string) func(fiber.Ctx) string {
+// EmailKey membuat key rate limit dari email di body JSON. Membatasi
+// percobaan menebak password satu akun walau penyerang berganti-ganti IP.
+func EmailKey(prefix string) func(fiber.Ctx) string {
 	return func(c fiber.Ctx) string {
 		var body struct {
 			Email string `json:"email"`
 		}
 		_ = json.Unmarshal(c.Body(), &body)
-		return prefix + ":" + c.IP() + ":" + strings.ToLower(strings.TrimSpace(body.Email))
+		return prefix + ":" + strings.ToLower(strings.TrimSpace(body.Email))
 	}
 }
 

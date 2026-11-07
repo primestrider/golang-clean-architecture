@@ -113,8 +113,13 @@ type JWTConfig struct {
 
 // RateLimitConfig mengatur batas jumlah request per menit.
 type RateLimitConfig struct {
+	// GlobalPerMinute berlaku untuk semua endpoint, per IP.
 	GlobalPerMinute int `mapstructure:"global_per_minute"`
-	AuthPerMinute   int `mapstructure:"auth_per_minute"`
+	// AuthPerMinute membatasi login/registrasi per email, dan refresh per IP.
+	AuthPerMinute int `mapstructure:"auth_per_minute"`
+	// AuthIPPerMinute membatasi login/registrasi per IP, berapa pun email
+	// yang dicoba (mencegah credential stuffing dari satu IP).
+	AuthIPPerMinute int `mapstructure:"auth_ip_per_minute"`
 }
 
 // KafkaConfig mengatur koneksi Kafka. Jika Enabled false, event tetap
