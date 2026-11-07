@@ -41,6 +41,11 @@ func run() error {
 	}
 	log := config.NewLogger(cfg)
 
+	shutdownTracing, err := config.NewTracerProvider(context.Background(), cfg)
+	if err != nil {
+		return err
+	}
+
 	db, err := config.NewDatabase(cfg, log)
 	if err != nil {
 		return err
@@ -97,6 +102,7 @@ func run() error {
 	errs = append(errs, app.ShutdownWithContext(shutdownCtx))
 	errs = append(errs, adminServer.Shutdown(shutdownCtx))
 	errs = append(errs, sqlDB.Close())
+	errs = append(errs, shutdownTracing(shutdownCtx))
 
 	log.Info("shutdown complete")
 	return errors.Join(errs...)

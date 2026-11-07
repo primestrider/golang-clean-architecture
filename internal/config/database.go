@@ -8,6 +8,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"gorm.io/plugin/opentelemetry/tracing"
 )
 
 // NewDatabase membuka koneksi GORM ke MySQL dan mengatur connection pool.
@@ -25,6 +26,13 @@ func NewDatabase(cfg *Config, log *slog.Logger) (*gorm.DB, error) {
 	})
 	if err != nil {
 		return nil, fmt.Errorf("connect database: %w", err)
+	}
+
+	// Plugin tracing membuat setiap query menjadi span anak dari request
+	// yang memicunya. Metrik GORM dimatikan karena statistik pool sudah
+	// dicatat lewat collector Prometheus.
+	if err := db.Use(tracing.NewPlugin(tracing.WithoutMetrics())); err != nil {
+		return nil, fmt.Errorf("enable gorm tracing: %w", err)
 	}
 
 	sqlDB, err := db.DB()

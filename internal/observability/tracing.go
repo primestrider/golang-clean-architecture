@@ -24,3 +24,12 @@ func InjectHeaders(ctx context.Context) map[string]string {
 func ExtractContext(ctx context.Context, headers map[string]string) context.Context {
 	return otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(headers))
 }
+
+// SetupPropagation memasang format propagasi W3C Trace Context (header
+// "traceparent") dan Baggage secara global. Dipanggil saat startup, walau
+// tracing dimatikan, supaya konteks trace dari layanan lain tetap diteruskan.
+func SetupPropagation() {
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{}, propagation.Baggage{},
+	))
+}

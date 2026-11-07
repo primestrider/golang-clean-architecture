@@ -2,6 +2,7 @@ package testsupport
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -44,6 +45,8 @@ func NewWebApp(t testing.TB, opts ...Option) *TestApp {
 	}
 
 	log := slog.New(slog.DiscardHandler)
+	_, err = config.NewTracerProvider(context.Background(), cfg)
+	require.NoError(t, err)
 	db, err := config.NewDatabase(cfg, log)
 	require.NoError(t, err)
 	sqlDB, err := db.DB()

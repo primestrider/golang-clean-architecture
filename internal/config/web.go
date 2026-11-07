@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"time"
 
+	fiberotel "github.com/gofiber/contrib/v3/otel"
 	"github.com/gofiber/fiber/v3"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/http"
 	"github.com/primestrider/golang-clean-architecture/internal/delivery/http/middleware"
@@ -66,7 +67,8 @@ func BootstrapWeb(deps *WebDeps) {
 		CORSOrigins:     deps.Config.Server.CORSOrigins,
 		RequestTimeout:  deps.Config.Server.RequestTimeout,
 		GlobalPerMinute: deps.Config.RateLimit.GlobalPerMinute,
-		Extra:           []fiber.Handler{deps.Metrics.HTTPMiddleware()},
+		// Tracing lebih dulu supaya span mencakup seluruh pemrosesan request.
+		Extra: []fiber.Handler{fiberotel.New(), deps.Metrics.HTTPMiddleware()},
 	}, deps.Log)
 
 	authLimit := deps.Config.RateLimit.AuthPerMinute

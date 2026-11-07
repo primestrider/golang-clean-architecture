@@ -8,6 +8,7 @@ import (
 
 	"github.com/primestrider/golang-clean-architecture/internal/entity"
 	"github.com/primestrider/golang-clean-architecture/internal/model"
+	"github.com/primestrider/golang-clean-architecture/internal/observability"
 	"github.com/primestrider/golang-clean-architecture/internal/usecase"
 )
 
@@ -126,5 +127,11 @@ func (d *LocalDispatcher) Dispatch(ctx context.Context, row entity.OutboxEvent) 
 	if err := json.Unmarshal(row.Payload, &e); err != nil {
 		return fmt.Errorf("decode outbox payload: %w", err)
 	}
+	// Lanjutkan trace dari request yang memicu event ini.
+	headers := map[string]string{}
+	if len(row.Headers) > 0 {
+		_ = json.Unmarshal(row.Headers, &headers)
+	}
+	ctx = observability.ExtractContext(ctx, headers)
 	return d.registry.Handle(ctx, e)
 }

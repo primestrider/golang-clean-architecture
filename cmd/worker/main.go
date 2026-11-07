@@ -39,6 +39,11 @@ func run() error {
 	}
 	log := config.NewLogger(cfg).With("component", "worker")
 
+	shutdownTracing, err := config.NewTracerProvider(context.Background(), cfg)
+	if err != nil {
+		return err
+	}
+
 	db, err := config.NewDatabase(cfg, log)
 	if err != nil {
 		return err
@@ -89,7 +94,7 @@ func run() error {
 		log.Warn("shutdown timeout reached before background jobs finished")
 	}
 
-	err = errors.Join(runErr, adminServer.Shutdown(shutdownCtx), worker.Close(), sqlDB.Close())
+	err = errors.Join(runErr, adminServer.Shutdown(shutdownCtx), worker.Close(), sqlDB.Close(), shutdownTracing(shutdownCtx))
 	log.Info("shutdown complete")
 	return err
 }

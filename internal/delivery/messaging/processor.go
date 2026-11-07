@@ -11,6 +11,8 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/primestrider/golang-clean-architecture/internal/model"
 	"github.com/primestrider/golang-clean-architecture/internal/observability"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // EventHandler memproses satu event yang sudah di-decode. Diimplementasikan
@@ -65,6 +67,8 @@ func (p *Processor) record(topic, result string) {
 // dipindah ke DLQ; offset tidak di-commit dan pesan akan dibaca ulang.
 func (p *Processor) Process(ctx context.Context, msg *sarama.ConsumerMessage) error {
 	ctx = observability.ExtractContext(ctx, headersOf(msg))
+	ctx, span := otel.Tracer("messaging").Start(ctx, "consume "+msg.Topic, trace.WithSpanKind(trace.SpanKindConsumer))
+	defer span.End()
 
 	var e model.Event
 	if err := json.Unmarshal(msg.Value, &e); err != nil {
