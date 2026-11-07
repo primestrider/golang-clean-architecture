@@ -56,3 +56,52 @@ func TestRateLimiter_FailsOpenWhenStorageIsDown(t *testing.T) {
 
 	assert.Equal(t, []int{200, 200, 429}, codes, "still serving and still limiting via the in-memory fallback")
 }
+
+// TestFailClosedStorage_ReturnsUnavailable: limiter keamanan (login,
+// refresh) tidak boleh beralih ke memori lokal saat Redis mati, karena
+// penyerang bisa memanfaatkan gangguan itu untuk melewati batas lintas
+// instance. Request ditolak 503.
+func TestFailClosedStorage_ReturnsUnavailable(t *testing.T) {
+	_, err := NewFailClosedStorage(brokenStorage{}).GetWithContext(context.Background(), "k")
+
+	appErr, ok := apperror.As(err)
+	require.True(t, ok)
+	assert.Equal(t, apperror.CodeUnavailable, appErr.Code)
+}
+
+// TestFailOpenStorage_StaysOnFallbackDuringCooldown: setelah storage utama
+// gagal, operasi berikutnya langsung memakai cadangan selama masa jeda,
+// supaya Get dan Set tidak bercampur di dua storage berbeda.
+func TestFailOpenStorage_StaysOnFallbackDuringCooldown(t *testing.T) {
+	primary := &countingStorage{fail: true}
+	s := NewFailOpenStorage(primary, slog.New(slog.DiscardHandler))
+
+	_, _ = s.GetWithContext(context.Background(), "k")
+	primary.fail = false
+	_ = s.SetWithContext(context.Background(), "k", []byte("v"), time.Minute)
+
+	assert.Equal(t, 1, primary.calls, "primary must not be retried during the cooldown")
+}
+
+// countingStorage menghitung pemanggilan dan bisa disetel gagal.
+type countingStorage struct {
+	brokenStorage
+	fail  bool
+	calls int
+}
+
+func (c *countingStorage) GetWithContext(context.Context, string) ([]byte, error) {
+	c.calls++
+	if c.fail {
+		return nil, errDown
+	}
+	return nil, nil
+}
+
+func (c *countingStorage) SetWithContext(context.Context, string, []byte, time.Duration) error {
+	c.calls++
+	if c.fail {
+		return errDown
+	}
+	return nil
+}

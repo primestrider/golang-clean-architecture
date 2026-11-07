@@ -66,12 +66,14 @@ func BootstrapWeb(deps *WebDeps) *WebComponents {
 
 	// Cache dan storage rate limiter: Redis bila aktif, selain itu memori.
 	var contactCache usecase.Cache = cache.NoopCache{}
-	var limiterStorage fiber.Storage
+	// Limiter global fail-open (Redis mati → memori lokal), limiter keamanan
+	// (login, registrasi, refresh) fail-closed (Redis mati → 503).
+	var limiterStorage, authLimiterStorage fiber.Storage
 	if deps.Redis != nil {
 		contactCache = cache.NewRedisCache(deps.Redis)
-		// Fail-open: bila Redis mati, limiter beralih ke memori lokal alih-alih
-		// membuat semua request gagal.
-		limiterStorage = middleware.NewFailOpenStorage(redisstorage.NewFromConnection(deps.Redis), deps.Log)
+		shared := redisstorage.NewFromConnection(deps.Redis)
+		limiterStorage = middleware.NewFailOpenStorage(shared, deps.Log)
+		authLimiterStorage = middleware.NewFailClosedStorage(shared)
 	}
 
 	// Use case: logika bisnis.
@@ -125,11 +127,11 @@ func BootstrapWeb(deps *WebDeps) *WebComponents {
 		AdminController:      http.NewAdminController(adminUseCase),
 		AvatarController:     avatarController,
 		AuthMiddleware:       middleware.NewAuth(tokens),
-		AuthIPEmailRateLimit: middleware.NewRateLimiter(authLimit, time.Minute, middleware.IPAndEmailKey("auth-ip-email"), limiterStorage),
-		AuthIPRateLimit:      middleware.NewRateLimiter(deps.Config.RateLimit.AuthIPPerMinute, time.Minute, middleware.IPKey("auth-ip"), limiterStorage),
+		AuthIPEmailRateLimit: middleware.NewRateLimiter(authLimit, time.Minute, middleware.IPAndEmailKey("auth-ip-email"), authLimiterStorage),
+		AuthIPRateLimit:      middleware.NewRateLimiter(deps.Config.RateLimit.AuthIPPerMinute, time.Minute, middleware.IPKey("auth-ip"), authLimiterStorage),
 		AuthEmailRateLimit: middleware.NewFailureRateLimiter(deps.Config.RateLimit.AuthEmailFailuresPerMinute, time.Minute,
-			middleware.EmailKey("auth-email"), limiterStorage),
-		RefreshRateLimit: middleware.NewRateLimiter(deps.Config.RateLimit.RefreshPerMinute, time.Minute, middleware.IPKey("refresh"), limiterStorage),
+			middleware.EmailKey("auth-email"), authLimiterStorage),
+		RefreshRateLimit: middleware.NewRateLimiter(deps.Config.RateLimit.RefreshPerMinute, time.Minute, middleware.IPKey("refresh"), authLimiterStorage),
 	}
 	routes.Setup()
 
