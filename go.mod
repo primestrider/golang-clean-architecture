@@ -4,12 +4,12 @@ go 1.27.3
 
 require (
 	github.com/IBM/sarama v1.61.1
-	github.com/go-co-op/gocron/v2 v2.23.0
+	github.com/go-co-op/gocron/v2 v2.23.1
 	github.com/go-playground/validator/v10 v10.30.6
 	github.com/gofiber/contrib/v3/otel v1.3.3
-	github.com/gofiber/fiber/v3 v3.6.1
+	github.com/gofiber/fiber/v3 v3.7.0
 	github.com/gofiber/storage/memory/v2 v2.1.2
-	github.com/gofiber/storage/redis/v3 v3.6.3
+	github.com/gofiber/storage/redis/v3 v3.6.4
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/golang-migrate/migrate/v4 v4.20.1
 	github.com/google/uuid v1.6.0
@@ -25,7 +25,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/kafka v0.45.0
 	github.com/testcontainers/testcontainers-go/modules/mysql v0.45.0
 	github.com/testcontainers/testcontainers-go/modules/redis v0.45.0
-	github.com/wneessen/go-mail v0.8.1
+	github.com/wneessen/go-mail v0.8.2
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.72.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.47.0
@@ -66,7 +66,7 @@ require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/eapache/go-resiliency v1.7.0 // indirect
-	github.com/ebitengine/purego v0.11.2 // indirect
+	github.com/ebitengine/purego v0.11.3 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.16 // indirect
@@ -96,7 +96,7 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
-	github.com/klauspost/compress v1.20.3 // indirect
+	github.com/klauspost/compress v1.20.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/klauspost/crc32 v1.3.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
@@ -148,7 +148,7 @@ require (
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/valyala/fasthttp v1.77.0 // indirect
+	github.com/valyala/fasthttp v1.78.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
@@ -163,7 +163,7 @@ require (
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc // indirect
 	gopkg.in/ini.v1 v1.67.3 // indirect
