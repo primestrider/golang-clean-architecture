@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- Tahap build: kompilasi semua binary ----
-FROM golang:1.27.3 AS build
+FROM golang:1.27.4 AS build
 WORKDIR /src
 
 # Unduh dependency lebih dulu supaya layer ini ter-cache selama go.mod dan
